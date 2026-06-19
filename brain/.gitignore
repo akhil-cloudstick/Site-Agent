@@ -48,3 +48,8 @@ node_modules/
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+
+# local run logs + script result files (network-drive workaround)
+*.log
+*-result.txt
+/_ping.txt

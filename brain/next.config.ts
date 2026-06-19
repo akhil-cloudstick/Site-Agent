@@ -14,11 +14,22 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  webpack: (webpackConfig) => {
+  webpack: (webpackConfig, { dev }) => {
     webpackConfig.resolve.extensionAlias = {
       '.cjs': ['.cts', '.cjs'],
       '.js': ['.ts', '.tsx', '.js', '.jsx'],
       '.mjs': ['.mts', '.mjs'],
+    }
+
+    // The project lives on a UNC/network drive (\\ZAISERVER) where native fs
+    // events don't work (Watchpack "UNKNOWN" errors). Force polling-based
+    // watching in dev so hot-reload works and the watcher stops erroring.
+    if (dev) {
+      webpackConfig.watchOptions = {
+        poll: 800,
+        aggregateTimeout: 300,
+        ignored: ['**/node_modules', '**/.next', '**/.git'],
+      }
     }
 
     return webpackConfig

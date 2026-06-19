@@ -46,3 +46,24 @@ _Things we deliberately simplified or postponed so the build stays vertical-slic
   - [ ] **Hosted CI** (`m1-ci`): slice 1 runs the lint-deny + isolation tests locally; the CI pipeline that also hosts the build-surface lockdown checks is deferred.
   - [ ] **DB hardening not needed yet**: `m2-media-refs`, `m2-saga-checkpoints`, `m2-indexes` (hot-path tuning), `m2-rls`.
 - **Kept honest even in the skeleton (NOT deferred — these are load-bearing):** single audited Local-API adapter with `overrideAccess:false`, the `beforeChange` ChangeSet hook + system-write deny, the minimal-role service principal, `NOT NULL tenant` FK, the one-active-ChangeSet partial unique index, and cross-Tenant isolation tests.
+
+## Data-model simplifications (Module 2, decided 2026-06-19)
+
+### Using `tenant` as the Site id; no separate `siteId` column yet
+- **What slice 1 does:** the one-active-ChangeSet partial unique index is on `changesets.tenant_id` (siteId == tenant in v1, per `DB-Architecture.md`).
+- **Owed:** a distinct `siteId`/`sites` concept when a Tenant can own more than one Site (already noted in `DB-Architecture.md` "Out of scope (v1)").
+
+### Integer primary keys, not UUIDs
+- **What slice 1 does:** Payload's default `serial` integer primary keys.
+- **Owed:** `DB-Architecture.md` specifies **UUID** PKs. Switching `idType` to `uuid` is a global schema change (rebuild while the DB is empty of real data). _(Functionally equivalent for slice 1 — media paths use a separate random nonce, not the row id — but adopt UUIDs before there is production data.)_ Surfaced per the user's "clear it or log it" rule.
+
+### Adapter concurrency hardening (per-Site advisory lock + atomic transaction)
+- **What slice 1 does:** the audited adapter (`src/broker/adapter.ts`) ensures an active ChangeSet then writes, with a zero-write backstop to clean up a ghost ChangeSet if a first edit fails.
+- **Owed (with the Discard feature, Codex R2 #2/#3):** wrap ensure+write in ONE DB transaction under a per-Site Postgres advisory lock shared with Discard, so a write can't race a discard. Not needed for the single-user slice-1 loop; the race first exists when Discard lands.
+
+### Local dev workflow: stop the server before migrations
+- `payload migrate` JAMS while a `pnpm start`/`pnpm dev` server is running (they compete for the migration lock; observed multiple piled-up hung processes). **Rule: stop the running app before running migrations.** Also set `db.push: false` so scripts (`payload run`) never auto-sync schema and create stray `dev` migration entries. _(Surfaced 2026-06-19.)_
+
+### `pages` NOT NULL `tenant`/`changeSetId` + FK on-delete policy
+- **What slice 1 does:** `changesets.tenant` is `NOT NULL` (enforced). Payload makes draft-enabled `pages` relationship columns nullable; FKs default to `ON DELETE set null`.
+- **Owed (next task — `m4-beforechange`/content-write, where it is runtime-testable):** add `NOT NULL` to `pages.tenant_id` + `pages.change_set_id_id`, and review FK on-delete (RESTRICT/CASCADE rather than SET NULL) so a Tenant/ChangeSet can't be deleted out from under its content. App layer (adapter + hook + access control) is the primary isolation control meanwhile.
