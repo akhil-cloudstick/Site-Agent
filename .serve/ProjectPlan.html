@@ -1,0 +1,1048 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SiteAgent v1 — Project Plan Tracker</title>
+<!--
+  SiteAgent v1 — Modules > Submodules > Tasks tracker.
+  Self-contained, offline, zero external requests. Inline CSS + JS only.
+  State persists in localStorage (key: siteagent.projectplan.v1).
+
+  CONTENT BUMP RULE (Codex R2 #4): any edit to the TASKS data below
+  (add/remove/re-id a task, or change a doc-ref / its meaning) MUST
+  increment CONTENT.contentVersion and update CONTENT.generatedFrom.
+  Both are rendered in the header so a forgotten bump is visible.
+
+  CHANGELOG
+  - v1 (2026-06-18): initial 13-module / 83-task breakdown.
+  - v2 (2026-06-18): added the DEPS map — task-to-task prerequisites
+    derived from Diagrams.md (architecture data-flow + workflow sequence)
+    and UserFlow.md. Adds dependency chips, readiness ("ready now" vs
+    "waiting on N"), a build-waves view, and cycle/missing-id validation.
+  - v3 (2026-06-18): mapped the new DB-Architecture.md into Module 2 —
+    +6 tasks (edit_leases, saga_checkpoints, FK constraints, indexes,
+    optional RLS, migrations ownership); re-pointed data-model doc-refs to
+    DB-Architecture.md; wired m13-lease→m2-edit-leases and
+    m9-jobs-durable→m2-saga-checkpoints. 83→89 tasks.
+  - v4 (2026-06-19): slice-1 build start (docs/PLAN.md, Codex-approved).
+    Added m8-inbrain-preview (slice-1 substitute for m8-ssr-worker) and
+    overrode m13-workspace dep → m8-inbrain-preview (not m8-ssr-worker) so
+    the graph matches the vertical-slice-first build. 89→90 tasks.
+
+  Source precedence: Architecture.md + ADR 0001 (Path B: Node+Postgres)
+  are authoritative for v1 and override stale AgentPlan.md / Path-A wording.
+-->
+<style>
+  :root{
+    --bg:#0f1419; --panel:#171d26; --panel2:#1d2530; --line:#2a3340;
+    --ink:#e6edf3; --muted:#9aa7b4; --faint:#6b7785;
+    --p1:#e3a008; --p2:#3b82f6; --p3:#6b7785;
+    --done:#2ea043; --prog:#3b82f6; --blocked:#e5534b; --todo:#6b7785;
+    --crit:#e5534b; --accent:#58a6ff; --focus:#ffd166;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    font-size:15px;line-height:1.45}
+  a{color:var(--accent)}
+  .wrap{max-width:1100px;margin:0 auto;padding:0 16px 80px}
+  header.app{position:sticky;top:0;z-index:50;background:rgba(15,20,25,.96);
+    backdrop-filter:blur(4px);border-bottom:1px solid var(--line);padding:12px 0}
+  header.app .wrap{padding-bottom:0}
+  h1{font-size:19px;margin:0 0 2px}
+  .sub{color:var(--muted);font-size:12.5px;margin-bottom:10px}
+  .sub code{background:var(--panel2);padding:1px 5px;border-radius:4px;color:var(--ink)}
+  .bars{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+  .pbar{flex:1;min-width:220px}
+  .pbar .lbl{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:3px}
+  .track{height:10px;background:var(--panel2);border-radius:6px;overflow:hidden;border:1px solid var(--line)}
+  .fill{height:100%;background:linear-gradient(90deg,#2ea043,#3fb950);width:0%;transition:width .25s}
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+  .toolbar .grp{display:flex;gap:6px;align-items:center;background:var(--panel);border:1px solid var(--line);
+    border-radius:8px;padding:4px 8px}
+  .toolbar label{font-size:12.5px;color:var(--muted);display:flex;gap:5px;align-items:center;cursor:pointer}
+  button{font:inherit;cursor:pointer;background:var(--panel2);color:var(--ink);
+    border:1px solid var(--line);border-radius:7px;padding:5px 11px}
+  button:hover{border-color:var(--accent)}
+  button.ghost{background:transparent}
+  :focus-visible{outline:3px solid var(--focus);outline-offset:1px;border-radius:4px}
+  .banner{margin:10px 0;padding:10px 12px;border-radius:8px;border:1px solid;font-size:13.5px;
+    display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .banner.warn{background:#3a2a12;border-color:#7a5b1e;color:#ffd79a}
+  .banner.err{background:#3a1717;border-color:#7a2c2c;color:#ffb3b3}
+  .banner.ok{background:#16301c;border-color:#2f6b3d;color:#bff0c8}
+  .banner .sp{flex:1;min-width:200px}
+  .hide{display:none !important}
+  section.mod{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin:14px 0;overflow:hidden}
+  .modhead{display:flex;gap:12px;align-items:center;padding:12px 14px;cursor:pointer;list-style:none}
+  .modhead::-webkit-details-marker{display:none}
+  .modhead .mi{font-size:12px;color:var(--faint);min-width:34px;font-variant-numeric:tabular-nums}
+  .modhead .mt{font-weight:650;font-size:15.5px;flex:1}
+  .modhead .mc{color:var(--muted);font-size:12px;min-width:64px;text-align:right;font-variant-numeric:tabular-nums}
+  .modhead .mtrack{width:120px}
+  details[open] > .modhead{border-bottom:1px solid var(--line)}
+  .submod{padding:2px 0 6px}
+  .subhead{display:flex;gap:10px;align-items:center;padding:9px 14px 9px 30px;cursor:pointer;list-style:none}
+  .subhead::-webkit-details-marker{display:none}
+  .subhead .st{flex:1;font-weight:600;font-size:13.5px;color:#cdd6df}
+  .subhead .sc{color:var(--faint);font-size:11.5px;font-variant-numeric:tabular-nums}
+  .marker{transition:transform .15s;color:var(--faint);font-size:11px}
+  details[open] > summary .marker{transform:rotate(90deg)}
+  ul.tasks{list-style:none;margin:0;padding:0 14px 6px 30px}
+  li.task{display:flex;gap:10px;padding:9px 8px;border-top:1px solid var(--line);align-items:flex-start}
+  li.task:first-child{border-top:none}
+  .tk-check{margin-top:2px}
+  .tk-check input{width:17px;height:17px;cursor:pointer;accent-color:var(--done)}
+  .tk-main{flex:1;min-width:0}
+  .tk-title{font-size:14px}
+  .tk-title.done{color:var(--muted);text-decoration:line-through}
+  .tk-meta{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:5px}
+  .chip{font-size:10.5px;padding:1px 7px;border-radius:20px;border:1px solid;white-space:nowrap;font-weight:600;letter-spacing:.2px}
+  .chip.p1{color:#ffce5c;border-color:#7a5b1e;background:#3a2a12}
+  .chip.p2{color:#9ec5ff;border-color:#274a7a;background:#13243a}
+  .chip.p3{color:#c2ccd6;border-color:#3a4654;background:#222a34}
+  .chip.crit{color:#ffb3b3;border-color:#7a2c2c;background:#3a1717}
+  .chip.inf{color:#cdb4ff;border-color:#4b3a7a;background:#231a3a}
+  .ref{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:var(--faint)}
+  .tk-status select{font:inherit;font-size:12px;background:var(--panel2);color:var(--ink);
+    border:1px solid var(--line);border-radius:6px;padding:3px 6px}
+  .tk-status select.s-done{border-color:var(--done)}
+  .tk-status select.s-in_progress{border-color:var(--prog)}
+  .tk-status select.s-blocked{border-color:var(--blocked)}
+  .tk-notes{margin-top:6px;display:flex;gap:8px;align-items:flex-start}
+  .tk-notes textarea{flex:1;min-height:0;height:30px;resize:vertical;font:inherit;font-size:12.5px;
+    background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:5px 7px}
+  .savestate{font-size:11px;color:var(--faint);min-width:48px;margin-top:6px}
+  .savestate.saving{color:#ffce5c}
+  .savestate.saved{color:var(--done)}
+  .savestate.error{color:var(--blocked)}
+  .right{margin-left:auto}
+  .legend{font-size:12px;color:var(--muted);margin:8px 0 0}
+  .cov table{border-collapse:collapse;width:100%;font-size:12.5px}
+  .cov th,.cov td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top}
+  .cov th{background:var(--panel2);color:var(--muted)}
+  .cov caption{text-align:left;color:var(--muted);font-size:12px;padding:6px 0}
+  footer{color:var(--faint);font-size:12px;margin-top:24px;border-top:1px solid var(--line);padding-top:12px}
+  .tk-deps{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px;font-size:11px}
+  .tk-deps .dlbl{color:var(--faint);font-size:11px}
+  .depchip{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:10.5px;
+    padding:1px 6px;border-radius:5px;border:1px solid var(--line);background:var(--panel2);color:#bcc6d0;cursor:pointer}
+  .depchip:hover{border-color:var(--accent)}
+  .depchip.met{color:#9be3ad;border-color:#2f5d3a}
+  .depchip.unmet{color:#ffc9a0;border-color:#6e4a2a}
+  .ready{font-size:10.5px;padding:1px 7px;border-radius:20px;border:1px solid;font-weight:600}
+  .ready.go{color:#9be3ad;border-color:#2f5d3a;background:#11261a}
+  .ready.wait{color:#ffc9a0;border-color:#6e4a2a;background:#2a1c0f}
+  .ready.isdone{color:var(--faint);border-color:var(--line);background:transparent}
+  @keyframes flashrow{0%{background:#2b3a1c}100%{background:transparent}}
+  li.task.flash{animation:flashrow 1.6s ease-out}
+  .waves .wave{border:1px solid var(--line);border-radius:8px;margin:8px 0;background:var(--panel2)}
+  .waves .wh{padding:7px 11px;font-weight:600;font-size:13px;border-bottom:1px solid var(--line);color:#cdd6df}
+  .waves ul{list-style:none;margin:0;padding:6px 11px}
+  .waves li{padding:3px 0;font-size:12.5px;display:flex;gap:8px;align-items:baseline}
+  .waves .wid{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:var(--faint);cursor:pointer;min-width:170px}
+  .waves .wid:hover{color:var(--accent)}
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+  details.mod > summary, details.sm > summary{user-select:none}
+  @media (max-width:680px){
+    .modhead .mtrack{display:none}
+    li.task{flex-wrap:wrap}
+  }
+</style>
+</head>
+<body>
+<header class="app">
+  <div class="wrap">
+    <h1>SiteAgent&nbsp;v1 — Project Plan Tracker</h1>
+    <div class="sub">
+      Modules&nbsp;›&nbsp;Submodules&nbsp;›&nbsp;Tasks, by architecture component ·
+      content&nbsp;<code id="ver"></code> · generated&nbsp;<code id="gen"></code> ·
+      sources: <code>Architecture.md</code> + <code>ADR&nbsp;0001</code> (override <code>AgentPlan.md</code>), <code>UserFlow.md</code>, <code>DB-Architecture.md</code>
+    </div>
+    <div class="bars">
+      <div class="pbar">
+        <div class="lbl"><span>Overall progress</span><span id="ovText">0 / 0</span></div>
+        <div class="track"><div class="fill" id="ovFill"></div></div>
+        <div id="ovBar" role="progressbar" aria-label="Overall progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" class="sr-only"></div>
+      </div>
+    </div>
+    <div class="toolbar">
+      <div class="grp" role="group" aria-label="Filters">
+        <label><input type="checkbox" id="fP1"> P1 only</label>
+        <label><input type="checkbox" id="fCrit"> Security-critical only</label>
+        <label><input type="checkbox" id="fHideDone"> Hide done</label>
+        <label><input type="checkbox" id="fReady"> Ready now</label>
+        <label><input type="checkbox" id="fBlocked"> Waiting on deps</label>
+        <span id="filtCount" class="ref" aria-live="polite"></span>
+      </div>
+      <div class="grp">
+        <button id="expandAll" class="ghost" type="button">Expand all</button>
+        <button id="collapseAll" class="ghost" type="button">Collapse all</button>
+      </div>
+      <div class="grp right">
+        <button id="btnExport" type="button">Export</button>
+        <button id="btnImport" type="button">Import</button>
+        <button id="btnReset" class="ghost" type="button">Reset</button>
+        <input type="file" id="fileImport" accept="application/json,.json" class="hide">
+      </div>
+    </div>
+    <div class="legend">
+      <strong>Priority = build sequencing.</strong>
+      <span class="chip p1">P1</span>&nbsp;first end-to-end vertical slice ·
+      <span class="chip p2">P2</span>&nbsp;hardening / multi-tenant / structural ·
+      <span class="chip p3">P3</span>&nbsp;polish / observability / later.
+      <span class="chip crit">⚠ security-critical</span>&nbsp;= isolation/correctness risk (independent of priority) ·
+      <span class="chip inf">inferred</span>&nbsp;= derived by engineering judgment (hover for rationale).
+      <br><strong>Dependencies</strong> (from <code>Diagrams.md</code> + <code>UserFlow.md</code>):
+      <span class="ready go">▶ ready</span>&nbsp;all prerequisites done ·
+      <span class="ready wait">⏳ waiting on N</span>&nbsp;prerequisites still open ·
+      <span class="depchip met">dep ✓</span>/<span class="depchip unmet">dep ✗</span>&nbsp;click a dep to jump to it.
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div id="banners"></div>
+  <div id="tree" aria-label="Project task tree"></div>
+
+  <details class="cov" style="margin-top:18px">
+    <summary class="subhead" style="padding-left:14px"><span class="marker">▶</span><span class="st">Coverage matrix — every Architecture contract &amp; UserFlow flow maps to a task or is explicitly out of scope</span></summary>
+    <div id="covWrap" style="padding:10px 14px"></div>
+  </details>
+
+  <details class="waves" style="margin-top:14px">
+    <summary class="subhead" style="padding-left:14px"><span class="marker">▶</span><span class="st">Build waves — dependency-ordered (Wave 0 = no prerequisites; each later wave needs the earlier ones)</span></summary>
+    <div id="wavesWrap" style="padding:6px 14px 12px">
+      <p class="legend" style="margin:6px 0 2px">Topological order from the <code>DEPS</code> graph. A task in Wave <em>k</em> has its longest prerequisite chain <em>k</em> deep — it can't truly start until everything in earlier waves it depends on is done. Within a wave, ordered by priority. Click an id to jump to the task.</p>
+      <div id="wavesBody"></div>
+    </div>
+  </details>
+
+  <footer>
+    <div id="liveRegion" role="status" aria-live="polite" class="sr-only"></div>
+    Self-contained &amp; offline — no external requests. Progress = <em>done leaf-tasks ÷ all non-deferred leaf-tasks</em>;
+    <em>in-progress</em> and <em>blocked</em> count as not done. State is per-browser (localStorage); use <strong>Export</strong> to back it up.
+    This is a planning artifact only — it generates no product code.
+  </footer>
+</div>
+
+<script>
+"use strict";
+/* ============================ CONTENT (immutable source of truth) ============================ */
+const CONTENT = {
+  contentVersion: 4,
+  generatedFrom: "2026-06-19",
+  modules: [
+    { id:"m1", title:"Foundation & Infra", subs:[
+      { title:"Brain app skeleton", tasks:[
+        { id:"m1-scaffold", t:"Scaffold the single Next.js + Payload v3 codebase (one process, one Postgres connection)", p:"P1", ref:"Architecture.md §1" },
+        { id:"m1-config-seam", t:"Server-side config/secret seam — GitHub/Cloudflare/Payload creds never reach the client", p:"P1", crit:true, ref:"Architecture.md §E" },
+        { id:"m1-ci", t:"CI baseline: lint + typecheck + test (host for the build-surface lockdown checks)", p:"P1", ref:"Architecture.md §D" }
+      ]},
+      { title:"Hosting", tasks:[
+        { id:"m1-host-warm", t:"Deploy Brain to an always-warm paid host (Railway/Fly/Render) + managed Postgres (Neon paid, no idle pause)", p:"P1", ref:"Architecture.md § Hosting" },
+        { id:"m1-host-doc", t:"Document that $0 tier is dev/demo only; the pilot floor is the warm paid tier (cold starts + DB pause break the saga)", p:"P3", ref:"Architecture.md § Hosting" }
+      ]}
+    ]},
+    { id:"m2", title:"Data Model & Persistence", subs:[
+      { title:"Control-plane schema (hard DB constraints, not convention)", tasks:[
+        { id:"m2-tenants", t:"`tenants` table (multi-tenant collection extended with Site attrs) → {slug, githubRepo, deployTargets, status} with DB constraints", p:"P1", ref:"DB-Architecture.md §tenants / Architecture.md §2" },
+        { id:"m2-changesets", t:"`changesets` table = the join key + state machine; columns {siteId, status, kind, gitBranch, headSha, previewDeploymentId, initiatedBy, correlationId}; partial UNIQUE(siteId) WHERE status IN the blocking set", p:"P1", crit:true, ref:"DB-Architecture.md §changesets / Architecture.md §2" },
+        { id:"m2-changeset-guard", t:"Guarded transition code: reject illegal moves; block new ChangeSets while a Site is in any unresolved/blocking state (set MUST equal the partial-index status set)", p:"P1", crit:true, ref:"DB-Architecture.md §state machine / Architecture.md §2" },
+        { id:"m2-media-refs", t:"`media_refs` registry: states staged|deployed|live|orphaned; GC only when every ref for an objectKey is orphaned, under a row lock", p:"P2", crit:true, ref:"DB-Architecture.md §media_refs / Architecture.md §2 (N6)" },
+        { id:"m2-audit", t:"`audit_log` append-only table — DB-enforced (REVOKE UPDATE/DELETE + trigger), not convention", p:"P2", ref:"DB-Architecture.md §audit_log / Architecture.md §Observability" },
+        { id:"m2-edit-leases", t:"`edit_leases` table — UNIQUE(siteId) = one editor per Site; heartbeatAt/expiresAt drive stale-takeover (backs Flow 10)", p:"P2", crit:true, ref:"DB-Architecture.md §edit_leases / UserFlow Flow 10" },
+        { id:"m2-saga-checkpoints", t:"`saga_checkpoints` table — UNIQUE(changeSetId, step) + UNIQUE idempotencyKey for exactly-once resume; advisory-lock per Site (backs the durable saga)", p:"P2", crit:true, ref:"DB-Architecture.md §saga_checkpoints / Architecture.md §D (#12)" }
+      ]},
+      { title:"Content schema", tasks:[
+        { id:"m2-payload-collections", t:"Payload content collections, tenant-scoped; every row carries NOT NULL tenant + changeSetId; layout blocks as jsonb; drafts/versions tables", p:"P1", ref:"DB-Architecture.md §content zone / Architecture.md §2" }
+      ]},
+      { title:"Integrity, isolation & migrations", tasks:[
+        { id:"m2-fk-constraints", t:"NOT NULL `tenant` FK on every tenant-scoped table (no unattributed row) + sane ON DELETE behavior — schema-layer isolation", p:"P1", crit:true, ref:"DB-Architecture.md §Isolation model (2)" },
+        { id:"m2-indexes", t:"Index plan for the hot paths: one-active-changeset partial unique, (tenant,changeSetId) content reads, (objectKey,state) media GC, (correlationId) tracing, lease/checkpoint uniques", p:"P2", ref:"DB-Architecture.md §Index summary" },
+        { id:"m2-rls", t:"OPTIONAL Postgres Row-Level Security keyed on a per-request tenant GUC — defense-in-depth over app-layer scoping (decide whether to enable in v1)", p:"P3", crit:true, inferred:"DB-Architecture proposes RLS as the next isolation ring beyond the single adapter; v1 relies on the app layer, so enabling it is a deliberate, surfaced decision rather than assumed.", ref:"DB-Architecture.md §Isolation model (3)" },
+        { id:"m2-migrations", t:"Single migration history: Payload owns content/collection DDL; control-plane constraints (partial index, CHECK enums, append-only grants, RLS) applied as custom SQL inside Payload migrations", p:"P2", ref:"DB-Architecture.md §Migrations & ownership" }
+      ]}
+    ]},
+    { id:"m3", title:"Tenancy & Provisioning", subs:[
+      { title:"provisionTenant() job", tasks:[
+        { id:"m3-provision-job", t:"`provisionTenant()` idempotent queued job — per-step idempotency keys + partial-failure rollback/cleanup; Tenant not invited until fully succeeded", p:"P2", ref:"UserFlow Flow 0 / AgentPlan.md §1" },
+        { id:"m3-repo", t:"Create a private GitHub repo from the Template repo", p:"P2", ref:"Architecture.md §3" },
+        { id:"m3-service-principal", t:"Create Payload tenant + minimal-role per-Tenant service principal (user) — NOT an API key as the broker identity", p:"P2", crit:true, ref:"Architecture.md §A" },
+        { id:"m3-deploy-targets", t:"Create Cloudflare production (Pages) + preview (Workers) surfaces and wire env", p:"P2", ref:"Architecture.md §5" },
+        { id:"m3-mapping", t:"Persist Tenant→{repo, deploy} mapping + create the human Tenant login (Payload user)", p:"P2", ref:"UserFlow Flow 0" },
+        { id:"m3-access-gate", t:"Provisioning gate: prove Cloudflare Access protects the exact preview Worker URL shape; else route previews through the Brain", p:"P2", crit:true, ref:"Architecture.md §C (#16) / UserFlow Flow 5" }
+      ]}
+    ]},
+    { id:"m4", title:"Payload CMS Integration", subs:[
+      { title:"Multi-tenancy & versions", tasks:[
+        { id:"m4-multitenant", t:"Enable the multi-tenant plugin (row-level tenant scoping) on content collections", p:"P1", crit:true, ref:"Architecture.md §2" },
+        { id:"m4-drafts", t:"Enable drafts/versions on content collections", p:"P1", ref:"AgentPlan.md §3" },
+        { id:"m4-admin-scoped", t:"Tenant-scoped Payload admin powering the embedded element-scoped editor panel", p:"P2", ref:"UserFlow Flow 3" }
+      ]},
+      { title:"ChangeSet enforcement hook (Contract B)", tasks:[
+        { id:"m4-beforechange", t:"Shared `beforeChange` hook: derive active ChangeSet from the principal, stamp changeSetId; no active ChangeSet → throw Forbidden", p:"P1", crit:true, ref:"Architecture.md §B / AgentPlan.md §3" },
+        { id:"m4-system-deny", t:"Deny-by-default for system/Jobs writes: only a typed, allowlisted req.context.systemPurpose may bypass; tests prove a Job can't edit Tenant content outside a ChangeSet", p:"P1", crit:true, ref:"Architecture.md §B" },
+        { id:"m4-ensure-changeset", t:"Atomically ensure the active ChangeSet on the first real write; auto-delete zero-write ChangeSets so 'draft pending' never lights for a ghost", p:"P1", ref:"UserFlow § Ensuring the active ChangeSet" }
+      ]}
+    ]},
+    { id:"m5", title:"Tool Broker", subs:[
+      { title:"Content write path (Contract A)", tasks:[
+        { id:"m5-localapi-adapter", t:"The single audited in-process Local API adapter — the ONLY module holding the `payload` handle; always overrideAccess:false + service-principal `user`", p:"P1", crit:true, ref:"Architecture.md §A" },
+        { id:"m5-lint-deny", t:"Lint rule denying any other payload.*/getPayload import anywhere in the codebase", p:"P1", crit:true, ref:"Architecture.md §A" },
+        { id:"m5-isolation-tests", t:"Cross-Tenant isolation tests in CI — assert cross-Tenant reads/writes fail (the load-bearing control)", p:"P1", crit:true, ref:"Architecture.md §A / Risks" }
+      ]},
+      { title:"Code write path & gate", tasks:[
+        { id:"m5-github-commit", t:"Broker commits to the ChangeSet branch via the GitHub App, restricted to the theme/templates/CSS/content path allowlist", p:"P2", ref:"Architecture.md §A/§D" },
+        { id:"m5-allowlist", t:"Per-mode intent allowlist, hard-bound to current Tenant + Site + ChangeSet", p:"P1", crit:true, ref:"Architecture.md §A" },
+        { id:"m5-initiator-audit", t:"Record the human Tenant as audit initiator — never as the principal the write executes as", p:"P2", ref:"Architecture.md §A / Observability" }
+      ]}
+    ]},
+    { id:"m6", title:"Agent Layer", subs:[
+      { title:"Orchestration", tasks:[
+        { id:"m6-orchestrator", t:"Agent orchestrator emits intents to the broker and never touches a store directly", p:"P1", ref:"Architecture.md §A" },
+        { id:"m6-model-seam", t:"`{provider, modelSlug}` config seam; v1 defaults Claude (structural) + Gemini (content/routing); OpenRouter later", p:"P1", ref:"Architecture.md §F / AgentPlan.md §7" },
+        { id:"m6-sse", t:"Stream agent output to the UI via SSE; surface Thinking… / Applying… / Updating preview… micro-states", p:"P2", ref:"Architecture.md §F / UserFlow micro-states" }
+      ]},
+      { title:"Content agent (Flow 2)", tasks:[
+        { id:"m6-content-agent", t:"Content-edit interpretation → broker write; honest 'couldn't apply — nothing changed' failure path", p:"P1", ref:"UserFlow Flow 2" }
+      ]},
+      { title:"Structural agent (Flow 4)", tasks:[
+        { id:"m6-structural-agent", t:"Map a design reference (words or image upload) to pre-approved global primitives — choose/order/configure via the registry", p:"P2", ref:"UserFlow Flow 4" },
+        { id:"m6-nofit-overlay", t:"No-fit case: ephemeral client-side preview overlay (NOT written to the ChangeSet) + explicit confirm-to-commit + log a new-primitive request for the Operator", p:"P2", ref:"UserFlow Flow 4" },
+        { id:"m6-mode-mismatch", t:"Detect a content/layout intent mismatch and SUGGEST switching mode (never auto-switch)", p:"P3", inferred:"UserFlow flags mode-toggle discoverability as an open risk; AgentPlan §6 forbids auto-classification — so 'suggest, don't switch' is the derived behavior.", ref:"UserFlow Risks / AgentPlan.md §6" }
+      ]}
+    ]},
+    { id:"m7", title:"Section Primitives & Registry", subs:[
+      { title:"Registry", tasks:[
+        { id:"m7-registry", t:"Machine-readable primitive registry: component, allowed props, examples, visual constraints, test fixture, Payload block schema, migration behavior", p:"P2", ref:"AgentPlan.md §2" },
+        { id:"m7-ci-check", t:"CI registry + AST check validating every structural edit against the registry contract", p:"P2", crit:true, ref:"AgentPlan.md §4" }
+      ]},
+      { title:"Library", tasks:[
+        { id:"m7-library", t:"Curate the initial Section primitive library (Astro components backed by shared Payload blocks)", p:"P2", ref:"AgentPlan.md §2" },
+        { id:"m7-closest-match", t:"'Closest match + refine + request-new-primitive' loop (new primitives are global Product releases, not per-Tenant)", p:"P3", ref:"UserFlow Flow 4 / AgentPlan.md §4" }
+      ]}
+    ]},
+    { id:"m8", title:"Preview Subsystem", subs:[
+      { title:"SSR preview (Contract C)", tasks:[
+        { id:"m8-ssr-worker", t:"Astro SSR-on-Workers preview, one deployment per ChangeSet branch, reading live drafts via the Brain", p:"P1", ref:"Architecture.md §C / §5" },
+        { id:"m8-inbrain-preview", t:"SLICE-1 SUBSTITUTE: in-Brain preview route renders the active ChangeSet draft (session-derived tenant, ignores client IDs, server-pinned ChangeSet, allowlisted public DTO via the audited adapter). Replaced by m8-ssr-worker later.", p:"P1", inferred:"Slice-1 walking skeleton (PLAN.md §24, Codex R1 #5/#6): proves the edit→preview loop without Cloudflare; m13-workspace depends on this instead of m8-ssr-worker for slice 1.", ref:"PLAN.md §24 / Architecture.md §C" },
+        { id:"m8-preview-lockdown", t:"Every preview deploy passes the SAME build-surface gate as merge (path denylist + AST/env/network guard) BEFORE it deploys", p:"P2", crit:true, ref:"Architecture.md §C (N3)" },
+        { id:"m8-preview-cred", t:"Preview draft-read uses a ChangeSet-scoped, read-only, public-DTO-only credential via the Brain proxy — useless outside the proxy", p:"P2", crit:true, ref:"Architecture.md §C" }
+      ]},
+      { title:"Draft-media proxy", tasks:[
+        { id:"m8-media-proxy", t:"Brain draft-media proxy: stable proxy URLs, checks Access/session, streams from the private R2 bucket (no signed URLs baked into HTML)", p:"P2", crit:true, ref:"Architecture.md §C" },
+        { id:"m8-media-authz", t:"Authorization: serve an asset iff Tenant-owned AND referenced by the active ChangeSet draft OR the Tenant's live published snapshot", p:"P2", crit:true, ref:"Architecture.md §C (N4)" }
+      ]},
+      { title:"Gating & resilience (Flow 5)", tasks:[
+        { id:"m8-access-gating", t:"Cloudflare Access gating; open-in-new-tab fallback served through the Brain when Access can't be proven seamless", p:"P2", ref:"UserFlow Flow 5" },
+        { id:"m8-session-expired", t:"Session-expired (401) → 'Your session expired — refresh to see your preview' + re-auth, not a broken frame", p:"P3", ref:"UserFlow Flow 5" }
+      ]}
+    ]},
+    { id:"m9", title:"Publish Saga", subs:[
+      { title:"Durable jobs (Contract D)", tasks:[
+        { id:"m9-jobs-durable", t:"Saga as Payload Jobs: idempotency keys, Postgres advisory lock/lease per Site (single-worker), per-step checkpoints, resume via deploy-webhook replay", p:"P2", crit:true, ref:"Architecture.md §D (#12)" }
+      ]},
+      { title:"Saga ordering (happy path)", tasks:[
+        { id:"m9-materialize", t:"Materialize + SANITIZE snapshot via Local API → content.snapshot.json + media-manifest.json (DTO allowlist + fail-closed + strict JSON-Schema)", p:"P2", crit:true, ref:"Architecture.md §D step1 / AgentPlan.md §5" },
+        { id:"m9-stage-media", t:"Stage media to random-nonce public paths; write media_refs as `staged` BEFORE the R2 copy", p:"P2", crit:true, ref:"Architecture.md §D step2" },
+        { id:"m9-commit-first", t:"Commit snapshot + manifest to the branch FIRST — before required human review — so the reviewed head SHA already includes them", p:"P2", ref:"Architecture.md §D step3" },
+        { id:"m9-protected-merge", t:"Protected merge: required checks on the exact head SHA, stale-review dismissal, expected-SHA merge (405 = hard gate), empty bypass list (bot not exempt)", p:"P2", crit:true, ref:"Architecture.md §D step4" },
+        { id:"m9-content-only-autopass", t:"Content-only / pure-composition publishes auto-satisfy the CODEOWNERS review check; only code-owned (build-surface) paths require platform review", p:"P2", ref:"Architecture.md §D step4 / UserFlow Flow 6" },
+        { id:"m9-single-build", t:"Merge triggers the SINGLE token-free Pages static build; resume on the deploy webhook matched to the merge SHA", p:"P2", ref:"Architecture.md §D step5" },
+        { id:"m9-publish-last", t:"On deploy success: promote refs staged→deployed, publish via Payload's publish API, then deployed→live, ChangeSet→published", p:"P2", crit:true, ref:"Architecture.md §D step6" }
+      ]},
+      { title:"Compensation / rollback (Flow 7)", tasks:[
+        { id:"m9-comp-prelive", t:"Pre-live failure (merge conflict / build fail) → reference-safe-GC staged media, content stays unpublished, ChangeSet → aborted", p:"P2", crit:true, ref:"UserFlow Flow 7 / Architecture.md §D" },
+        { id:"m9-comp-postdeploy", t:"Post-deploy failure → revert the merge commit, wait rollback deploy success, reference-safe-GC, ChangeSet → failed_deploy_reverted", p:"P2", crit:true, ref:"UserFlow Flow 7 / Architecture.md §D" },
+        { id:"m9-comp-pending-publish", t:"deployed_pending_publish recovery: retry publish OR revert merge → wait rollback success → GC non-live refs → rolled_back_from_deployed_pending_publish", p:"P2", crit:true, ref:"Architecture.md §D step6 / UserFlow Flow 7" },
+        { id:"m9-operator-rollback", t:"Operator rollback of a published ChangeSet: git revert + Payload version restore → re-run saga to redeploy the prior snapshot", p:"P3", ref:"UserFlow Flow 11 / Architecture.md §D" }
+      ]}
+    ]},
+    { id:"m10", title:"Media Pipeline", subs:[
+      { title:"Buckets", tasks:[
+        { id:"m10-r2-buckets", t:"R2 private (draft) + public (published) buckets via the storage adapter", p:"P2", ref:"Architecture.md §4" }
+      ]},
+      { title:"Reference-safe lifecycle", tasks:[
+        { id:"m10-nonce-paths", t:"Stage published media to snapshot-namespaced random-nonce paths (UUIDv4, NOT a content hash)", p:"P2", crit:true, ref:"Architecture.md §4 / AgentPlan.md §5" },
+        { id:"m10-ref-gc", t:"Reference-safe GC driven by media_refs — delete an object only when every ref is orphaned, under a row lock", p:"P2", crit:true, ref:"Architecture.md §2 (N6)" },
+        { id:"m10-r2-lifecycle", t:"R2 lifecycle rule on a staging/ prefix as a time-based backstop only — never on live media", p:"P3", ref:"AgentPlan.md §5" }
+      ]}
+    ]},
+    { id:"m11", title:"Auth & Identity", subs:[
+      { title:"Tenant auth (Contract E)", tasks:[
+        { id:"m11-tenant-auth", t:"Payload user auth, multi-tenant scoped — one login gates the Chat+Preview UI and the Tenant-scoped admin", p:"P1", crit:true, ref:"Architecture.md §E" },
+        { id:"m11-operator-admin", t:"Operator admin user", p:"P2", ref:"Architecture.md §E / UserFlow Flow 0" }
+      ]},
+      { title:"Machine identity & secrets", tasks:[
+        { id:"m11-github-app", t:"GitHub App identity with per-repo installation tokens; never on the production branch protection bypass list", p:"P2", crit:true, ref:"Architecture.md §3 / §D" },
+        { id:"m11-secrets", t:"All GitHub/Cloudflare/Payload secrets held server-side in the Brain only (never client-exposed)", p:"P1", crit:true, ref:"Architecture.md §E" },
+        { id:"m11-roles-open", t:"OPEN: Tenant roles / multi-user teams / who-can-publish / billing are unspecified — decide before real teams", p:"P3", inferred:"Architecture §E and AgentPlan both list roles/billing as open; surfaced as an explicit decision task rather than invented.", ref:"Architecture.md §Risks / AgentPlan.md open items" }
+      ]}
+    ]},
+    { id:"m12", title:"Observability", subs:[
+      { title:"Correlation & audit", tasks:[
+        { id:"m12-correlation", t:"One correlation ID threading request → ChangeSet → Job run → Git commit → Cloudflare deploy → media_refs ops, in every log line", p:"P2", ref:"Architecture.md §Observability" },
+        { id:"m12-audit-coverage", t:"audit_log covers every risky op: saga transitions, Local-API writes, snapshot hashes, merge attempts (incl. 405), deploy webhooks, media copy/promote/GC, and every access denial", p:"P2", crit:true, ref:"Architecture.md §Observability" }
+      ]},
+      { title:"Operator visibility", tasks:[
+        { id:"m12-saga-visibility", t:"Surface saga/state-machine status to the Operator + failure notifications carrying the correlation ID", p:"P2", ref:"UserFlow Flow 7 / Architecture.md §Observability" }
+      ]}
+    ]},
+    { id:"m13", title:"UX / Workspace Frontend", subs:[
+      { title:"Workspace shell", tasks:[
+        { id:"m13-workspace", t:"Chat-left / preview-right workspace + mode toggle + bottom draft-status bar; starter site so the preview is never blank", p:"P1", ref:"UserFlow Flow 1" },
+        { id:"m13-mode-toggle", t:"Explicit 'Edit content' / 'Change layout' toggle — no auto-classification", p:"P1", ref:"UserFlow Flow 4 / AgentPlan.md §6" },
+        { id:"m13-state-model", t:"Visible customer state model (Published / Draft pending / Reviewing / Publishing / Paused-recovery); ChangeSet/branch/merge/saga vocab never shown", p:"P1", ref:"UserFlow §Visible state model" },
+        { id:"m13-micro-states", t:"First-class loading micro-states: Agent Thinking/Applying/Updating, Preview Refreshing, editor Saving/Saved", p:"P2", ref:"UserFlow §micro-states" }
+      ]},
+      { title:"Edit interactions", tasks:[
+        { id:"m13-direct-editor", t:"Embedded element-scoped direct editor panel with Cancel/Save — not a navigation into the full Payload admin", p:"P2", ref:"UserFlow Flow 3" },
+        { id:"m13-publish-ux", t:"Publish button → Publishing/Reviewing states, editing locked, honest success + failure copy (pre-live vs post-deploy)", p:"P1", ref:"UserFlow Flow 6 / Flow 7" },
+        { id:"m13-discard-ux", t:"Discard as a single locked transaction: quiesce in-flight writes, tear down content+branch+preview+staged media, invalidate stale tabs, return to Published", p:"P2", crit:true, ref:"UserFlow Flow 8" },
+        { id:"m13-rejected-copy", t:"Plain-language rejected/blocked-edit copy ('I can't do that.') — never a raw error", p:"P2", ref:"UserFlow Flow 9" }
+      ]},
+      { title:"Concurrency & access", tasks:[
+        { id:"m13-lease", t:"One-editor-per-Site heartbeat lease; second editor sees read-only 'someone is editing'; stale-session [Take over editing]", p:"P2", crit:true, ref:"UserFlow Flow 10" },
+        { id:"m13-stale-tab", t:"Server-side enforcement: reject a stale admin tab's Save during publish/discard or after takeover (UI lock is convenience; server check is the guarantee)", p:"P2", crit:true, ref:"UserFlow Flow 10" }
+      ]},
+      { title:"Accessibility & responsive", tasks:[
+        { id:"m13-responsive", t:"Narrow/mobile: collapse the split to switchable Chat · Preview · Changes tabs", p:"P3", ref:"UserFlow §Accessibility & responsive" },
+        { id:"m13-keyboard-a11y", t:"Keyboard-selectable editable elements, labeled controls + live-region state announcements, non-pointer path to 'Edit this directly'", p:"P3", ref:"UserFlow §Accessibility & responsive" }
+      ]}
+    ]}
+  ]
+};
+
+/* ============================ DEPENDENCIES (Diagrams.md + UserFlow.md) ============================
+   Each entry: taskId -> [direct prerequisite taskIds]. Derived from:
+   - Diagrams.md §1 architecture data-flow (Agent->Broker->Adapter->Postgres; Saga->Adapter/GitHub/R2->Prod;
+     Preview->Proxy->PG/R2priv; deploy webhook->Saga), and
+   - Diagrams.md §2 + UserFlow.md workflow sequence (provision -> login -> mode -> edit -> preview ->
+     publish/discard -> review -> run -> live/fail).
+   Direct prerequisites only (no transitive closure). Validated acyclic + all-ids-present at boot. */
+const DEPS = {
+  "m1-scaffold":[], "m1-config-seam":["m1-scaffold"], "m1-ci":["m1-scaffold"], "m1-host-warm":["m1-scaffold"], "m1-host-doc":["m1-host-warm"],
+  "m2-tenants":["m1-scaffold"], "m2-changesets":["m2-tenants"], "m2-changeset-guard":["m2-changesets"], "m2-media-refs":["m2-changesets"], "m2-audit":["m1-scaffold"], "m2-payload-collections":["m1-scaffold"],
+  "m2-edit-leases":["m2-tenants"], "m2-saga-checkpoints":["m2-changesets"], "m2-fk-constraints":["m2-payload-collections","m2-tenants"], "m2-indexes":["m2-changesets","m2-media-refs","m2-audit"], "m2-rls":["m2-fk-constraints"], "m2-migrations":["m2-payload-collections"],
+  "m3-provision-job":["m3-repo","m3-service-principal","m3-deploy-targets","m3-mapping"], "m3-repo":["m11-github-app"], "m3-service-principal":["m4-multitenant","m11-tenant-auth"], "m3-deploy-targets":["m1-config-seam"], "m3-mapping":["m2-tenants"], "m3-access-gate":["m3-deploy-targets"],
+  "m4-multitenant":["m2-payload-collections"], "m4-drafts":["m2-payload-collections"], "m4-admin-scoped":["m4-multitenant"], "m4-beforechange":["m4-multitenant","m2-changesets"], "m4-system-deny":["m4-beforechange"], "m4-ensure-changeset":["m4-beforechange","m2-changeset-guard"],
+  "m5-localapi-adapter":["m4-multitenant","m4-beforechange"], "m5-lint-deny":["m5-localapi-adapter"], "m5-isolation-tests":["m5-localapi-adapter"], "m5-github-commit":["m11-github-app","m2-tenants"], "m5-allowlist":["m5-localapi-adapter"], "m5-initiator-audit":["m5-localapi-adapter","m2-audit"],
+  "m6-orchestrator":["m5-allowlist"], "m6-model-seam":["m1-config-seam"], "m6-sse":["m6-orchestrator"], "m6-content-agent":["m6-orchestrator","m6-model-seam","m5-localapi-adapter"], "m6-structural-agent":["m6-orchestrator","m6-model-seam","m7-registry"], "m6-nofit-overlay":["m6-structural-agent"], "m6-mode-mismatch":["m6-orchestrator","m13-mode-toggle"],
+  "m7-registry":["m1-scaffold"], "m7-ci-check":["m7-registry","m1-ci"], "m7-library":["m7-registry"], "m7-closest-match":["m6-structural-agent","m7-library"],
+  "m8-ssr-worker":["m4-drafts","m3-deploy-targets"], "m8-inbrain-preview":["m5-localapi-adapter","m4-drafts","m11-tenant-auth"], "m8-preview-lockdown":["m8-ssr-worker"], "m8-preview-cred":["m5-localapi-adapter","m4-drafts"], "m8-media-proxy":["m10-r2-buckets","m11-tenant-auth"], "m8-media-authz":["m8-media-proxy","m2-media-refs"], "m8-access-gating":["m8-ssr-worker","m3-access-gate"], "m8-session-expired":["m8-access-gating"],
+  "m9-jobs-durable":["m2-changesets","m2-saga-checkpoints","m1-host-warm"], "m9-materialize":["m9-jobs-durable","m5-localapi-adapter"], "m9-stage-media":["m9-materialize","m10-nonce-paths"], "m9-commit-first":["m9-materialize","m5-github-commit"], "m9-protected-merge":["m9-commit-first","m11-github-app","m7-ci-check"], "m9-content-only-autopass":["m9-protected-merge"], "m9-single-build":["m9-protected-merge","m3-deploy-targets"], "m9-publish-last":["m9-single-build","m2-media-refs"], "m9-comp-prelive":["m9-protected-merge","m10-ref-gc"], "m9-comp-postdeploy":["m9-single-build","m10-ref-gc"], "m9-comp-pending-publish":["m9-publish-last","m9-comp-postdeploy"], "m9-operator-rollback":["m9-publish-last"],
+  "m10-r2-buckets":["m1-config-seam"], "m10-nonce-paths":["m10-r2-buckets","m2-media-refs"], "m10-ref-gc":["m2-media-refs","m10-nonce-paths"], "m10-r2-lifecycle":["m10-r2-buckets"],
+  "m11-tenant-auth":["m4-multitenant"], "m11-operator-admin":["m11-tenant-auth"], "m11-github-app":["m11-secrets"], "m11-secrets":["m1-config-seam"], "m11-roles-open":[],
+  "m12-correlation":["m1-scaffold"], "m12-audit-coverage":["m2-audit","m9-jobs-durable"], "m12-saga-visibility":["m9-jobs-durable","m12-correlation"],
+  "m13-workspace":["m11-tenant-auth","m8-inbrain-preview"], "m13-mode-toggle":["m13-workspace"], "m13-state-model":["m13-workspace","m2-changesets"], "m13-micro-states":["m6-sse","m13-workspace"], "m13-direct-editor":["m13-workspace","m4-admin-scoped"], "m13-publish-ux":["m13-state-model","m9-jobs-durable"], "m13-discard-ux":["m13-state-model","m10-ref-gc","m2-changeset-guard"], "m13-rejected-copy":["m13-workspace","m5-allowlist"], "m13-lease":["m13-workspace","m2-edit-leases"], "m13-stale-tab":["m13-lease","m4-beforechange"], "m13-responsive":["m13-workspace"], "m13-keyboard-a11y":["m13-workspace"]
+};
+
+/* Coverage matrix: contract/flow -> where it's covered (or out of scope). */
+const COVERAGE = {
+  contracts: [
+    ["A — Agent→broker as service principal","m5-localapi-adapter, m5-lint-deny, m5-isolation-tests, m5-allowlist, m6-orchestrator"],
+    ["B — Every write forced into active ChangeSet","m4-beforechange, m4-system-deny, m4-ensure-changeset"],
+    ["C — SSR-on-Workers preview + draft-media proxy","m8-ssr-worker, m8-preview-lockdown, m8-preview-cred, m8-media-proxy, m8-media-authz"],
+    ["D — Publish saga (protected merge, durable jobs)","m9-* (all)"],
+    ["E — Identity & auth","m11-tenant-auth, m11-operator-admin, m11-github-app, m11-secrets"],
+    ["F — Agent model seam","m6-model-seam, m6-sse"]
+  ],
+  flows: [
+    ["0 — Operator onboards a Tenant","m3-* (all)"],
+    ["1 — First login → workspace","m13-workspace, m11-tenant-auth"],
+    ["2 — Content edit via chat","m6-content-agent, m5-localapi-adapter"],
+    ["3 — Content edit via direct CMS","m13-direct-editor, m4-admin-scoped"],
+    ["4 — Structural edit","m6-structural-agent, m6-nofit-overlay, m7-* "],
+    ["5 — Preview review","m8-access-gating, m8-session-expired, m3-access-gate"],
+    ["6 — Publish (happy path)","m13-publish-ux, m9-content-only-autopass, m9-* "],
+    ["7 — Publish failure","m9-comp-prelive, m9-comp-postdeploy, m9-comp-pending-publish, m13-publish-ux, m12-saga-visibility"],
+    ["8 — Discard","m13-discard-ux, m10-ref-gc"],
+    ["9 — Rejected / blocked edits","m13-rejected-copy, m5-allowlist"],
+    ["10 — Concurrency (lease)","m13-lease, m13-stale-tab"],
+    ["11 — Post-publish Operator rollback","m9-operator-rollback, m12-saga-visibility"]
+  ],
+  outOfScope: [
+    "Self-serve signup; customer-facing live rollback; multi-user/role Tenant teams (UserFlow OOS)",
+    "URL-copy & Figma design references; auto-classification of content vs layout (UserFlow OOS)",
+    "Cloudflare Workers + D1 content hosting & the 10-gate spike — deferred Path-A (ADR 0001 / Architecture OOS)",
+    "Splitting agent/broker/CMS into separate services — one program in v1 (Architecture OOS)",
+    "Custom domains, OpenRouter, DB-per-Tenant isolation, billing — later (Architecture OOS)"
+  ]
+};
+
+/* ============================ STATE OVERLAY (mutable, validated) ============================ */
+const STORAGE_KEY = "siteagent.projectplan.v1";
+const SCHEMA_VERSION = 1;
+const STATUSES = ["todo","in_progress","done","blocked"];
+const STATUS_LABEL = { todo:"To do", in_progress:"In progress", done:"Done", blocked:"Blocked" };
+const STATUS_GLYPH = { todo:"○", in_progress:"◐", done:"●", blocked:"✕" };
+
+let savingDisabled = false;   // set true on duplicate-id collision
+let storageOK = true;         // false → in-memory fallback
+let state = { schemaVersion:SCHEMA_VERSION, contentVersion:CONTENT.contentVersion, generatedFrom:CONTENT.generatedFrom, tasks:{} };
+
+const $ = (id) => document.getElementById(id);
+const banners = $("banners");
+
+function allTaskIds(){ const ids=[]; CONTENT.modules.forEach(m=>m.subs.forEach(s=>s.tasks.forEach(t=>ids.push(t.id)))); return ids; }
+function allTasks(){ const out=[]; CONTENT.modules.forEach(m=>m.subs.forEach(s=>s.tasks.forEach(t=>out.push(t)))); return out; }
+
+/* ---- dependency engine ---- */
+const TASK_BY_ID = {};   // id -> {task, moduleTitle}
+CONTENT.modules.forEach(m=>m.subs.forEach(s=>s.tasks.forEach(t=>{ TASK_BY_ID[t.id]={task:t, mod:m.title, modId:m.id}; })));
+function depsOf(id){ return DEPS[id] || []; }
+let DEP_VALID = true;     // set false on missing-id / cycle; readiness then degrades gracefully
+
+function validateDeps(){
+  const ids = new Set(allTaskIds());
+  const missing = [];
+  for(const id of allTaskIds()){ depsOf(id).forEach(d=>{ if(!ids.has(d)) missing.push(id+" → "+d); }); }
+  // cycle detection (DFS colours)
+  const WHITE=0,GREY=1,BLACK=2; const color={}; allTaskIds().forEach(i=>color[i]=WHITE);
+  const cycles=[];
+  function dfs(u,stack){ color[u]=GREY; stack.push(u);
+    for(const v of depsOf(u)){ if(!ids.has(v)) continue;
+      if(color[v]===GREY){ const i=stack.indexOf(v); cycles.push(stack.slice(i).concat(v).join(" → ")); }
+      else if(color[v]===WHITE) dfs(v,stack); }
+    stack.pop(); color[u]=BLACK; }
+  allTaskIds().forEach(i=>{ if(color[i]===WHITE) dfs(i,[]); });
+  return { missing, cycles };
+}
+
+// longest-prerequisite-chain depth (wave). Memoised; cycle-safe via visited set.
+const _depthMemo={};
+function depthOf(id, seen){
+  if(id in _depthMemo) return _depthMemo[id];
+  seen = seen || new Set();
+  if(seen.has(id)) return 0;       // cycle guard
+  seen.add(id);
+  let m=0; depsOf(id).forEach(d=>{ if(TASK_BY_ID[d]) m=Math.max(m, depthOf(d,seen)+1); });
+  seen.delete(id);
+  return _depthMemo[id]=m;
+}
+
+// readiness from current status overlay: a task is "ready" if every dep is done.
+function readiness(id){
+  const deps = depsOf(id);
+  const unmet = deps.filter(d=>TASK_BY_ID[d] && getTask(d).status!=="done");
+  return { ready: unmet.length===0, unmet, deps };
+}
+
+function addBanner(kind, html, actions){
+  const b = document.createElement("div");
+  b.className = "banner " + kind;
+  const sp = document.createElement("div"); sp.className="sp"; sp.innerHTML = html; b.appendChild(sp);
+  (actions||[]).forEach(a=>{ const btn=document.createElement("button"); btn.type="button"; btn.textContent=a.label;
+    btn.addEventListener("click",()=>a.fn(b)); b.appendChild(btn); });
+  banners.appendChild(b);
+  return b;
+}
+
+function isValidState(o){
+  if(!o || typeof o!=="object") return false;
+  if(typeof o.schemaVersion!=="number") return false;
+  if(!o.tasks || typeof o.tasks!=="object") return false;
+  return true;
+}
+
+function sanitizeTasks(rawTasks){
+  // keep only known ids + valid fields
+  const known = new Set(allTaskIds());
+  const clean = {}; let dropped = 0;
+  for(const id in rawTasks){
+    if(!known.has(id)){ dropped++; continue; }
+    const v = rawTasks[id] || {};
+    const status = STATUSES.includes(v.status) ? v.status : "todo";
+    const notes = typeof v.notes==="string" ? v.notes.slice(0,5000) : "";
+    clean[id] = { status, notes };
+  }
+  return { clean, dropped };
+}
+
+function loadState(){
+  let raw = null;
+  try { raw = localStorage.getItem(STORAGE_KEY); }
+  catch(e){ storageOK=false; addBanner("warn","⚠ Browser storage is unavailable (private mode or blocked). <strong>Changes won't be saved</strong> — use Export to keep a copy."); return; }
+  if(raw==null) return; // first run, defaults stand
+  let parsed;
+  try { parsed = JSON.parse(raw); }
+  catch(e){ addBanner("warn","⚠ Saved progress was corrupt (invalid JSON) and was ignored. Starting fresh; previous data could not be recovered."); return; }
+  if(!isValidState(parsed)){ addBanner("warn","⚠ Saved progress had an unexpected shape and was ignored."); return; }
+  const { clean, dropped } = sanitizeTasks(parsed.tasks);
+  state.tasks = clean;
+  if(typeof parsed.contentVersion==="number" && parsed.contentVersion!==CONTENT.contentVersion){
+    addBanner("warn",
+      "⚠ Your saved progress was recorded against content <strong>v"+parsed.contentVersion+
+      "</strong>, but this file is content <strong>v"+CONTENT.contentVersion+"</strong>. Task meanings may have shifted — review before trusting checkmarks.",
+      [
+        { label:"Keep my progress", fn:(b)=>{ state.contentVersion=CONTENT.contentVersion; saveState(); b.remove(); announce("Kept saved progress."); } },
+        { label:"Discard saved progress", fn:(b)=>{ state.tasks={}; state.contentVersion=CONTENT.contentVersion; saveState(); b.remove(); render(); announce("Saved progress discarded."); } }
+      ]);
+  }
+  if(dropped>0){ addBanner("warn","Note: "+dropped+" saved entr"+(dropped===1?"y":"ies")+" referred to unknown task id(s) and "+(dropped===1?"was":"were")+" dropped (likely from an older content version)."); }
+}
+
+let saveTimer = null;
+function saveState(){
+  if(savingDisabled || !storageOK) return false;
+  try {
+    state.schemaVersion = SCHEMA_VERSION;
+    state.generatedFrom = CONTENT.generatedFrom;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    return true;
+  } catch(e){
+    storageOK = false;
+    addBanner("warn","⚠ Couldn't save to browser storage (it may be full). <strong>Further changes won't persist</strong> — Export to keep your progress.");
+    return false;
+  }
+}
+
+function getTask(id){ if(!state.tasks[id]) state.tasks[id]={status:"todo",notes:""}; return state.tasks[id]; }
+
+/* ===================== SERVER SYNC (multi-user) =====================
+   When this page is served by server.js, status + notes live in ONE shared
+   copy on the server so every visitor sees the same thing. localStorage stays
+   as an offline cache/fallback. If there's no server (file opened directly),
+   everything below silently no-ops and the page works per-browser as before. */
+let serverMode=false, serverRev=-1, pollTimer=null, pushInFlight=0;
+
+async function serverInit(){
+  try{
+    const r=await fetch("api/state",{cache:"no-store"});
+    if(!r.ok) throw 0;
+    const data=await r.json();
+    if(!data || typeof data.tasks!=="object") throw 0;
+    serverMode=true;
+    if(typeof data.rev==="number") serverRev=data.rev;
+    const { clean }=sanitizeTasks(data.tasks);
+    state.tasks=clean;
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){}
+    render();
+    // addBanner("ok","🟢 <strong>Shared mode:</strong> status &amp; notes are saved on the server and visible to everyone. Other people's updates appear here automatically within a few seconds.");
+    if(pollTimer) clearInterval(pollTimer);
+    pollTimer=setInterval(serverPoll,4000);
+  }catch(e){ /* no server reachable → stay in per-browser localStorage mode */ }
+}
+
+async function serverPoll(){
+  if(!serverMode || document.hidden || pushInFlight>0) return;
+  const ae=document.activeElement;
+  if(ae && ae.tagName==="TEXTAREA") return; // don't yank a note someone is typing
+  try{
+    const r=await fetch("api/state",{cache:"no-store"});
+    if(!r.ok) return;
+    const data=await r.json();
+    if(typeof data.rev!=="number" || data.rev===serverRev) return;
+    serverRev=data.rev;
+    const { clean }=sanitizeTasks(data.tasks||{});
+    state.tasks=clean;
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){}
+    render();
+  }catch(e){}
+}
+
+async function serverPushTask(id){
+  if(!serverMode) return;
+  const t=getTask(id);
+  pushInFlight++;
+  try{
+    const r=await fetch("api/task",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({id, status:t.status, notes:t.notes})});
+    if(r.ok){ const d=await r.json(); if(d && typeof d.rev==="number") serverRev=d.rev; }
+  }catch(e){}
+  finally{ pushInFlight--; }
+}
+
+async function serverPushBulk(replace){
+  if(!serverMode) return;
+  pushInFlight++;
+  try{
+    const r=await fetch("api/bulk",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({tasks:state.tasks, replace:!!replace})});
+    if(r.ok){ const d=await r.json(); if(d && typeof d.rev==="number") serverRev=d.rev; }
+  }catch(e){}
+  finally{ pushInFlight--; }
+}
+
+/* ============================ PROGRESS ============================ */
+function counts(taskList){
+  let done=0, total=0;
+  taskList.forEach(t=>{ total++; if(getTask(t.id).status==="done") done++; });
+  return { done, total };
+}
+function pct(c){ return c.total? Math.round(c.done*100/c.total) : 0; }
+
+function updateProgress(){
+  // Overall (full denominator — never affected by filters)
+  const all = allTasks();
+  const ov = counts(all);
+  $("ovFill").style.width = pct(ov)+"%";
+  $("ovText").textContent = ov.done+" / "+ov.total+" ("+pct(ov)+"%)";
+  const ob = $("ovBar"); ob.setAttribute("aria-valuenow", String(pct(ov)));
+  ob.setAttribute("aria-valuetext", ov.done+" of "+ov.total+" tasks done");
+  // Per module + submodule
+  CONTENT.modules.forEach(m=>{
+    const mTasks=[]; m.subs.forEach(s=>s.tasks.forEach(t=>mTasks.push(t)));
+    const mc=counts(mTasks);
+    const fill=document.querySelector('[data-mfill="'+m.id+'"]');
+    if(fill) fill.style.width=pct(mc)+"%";
+    const txt=document.querySelector('[data-mcount="'+m.id+'"]');
+    if(txt) txt.textContent=mc.done+"/"+mc.total;
+    const bar=document.querySelector('[data-mbar="'+m.id+'"]');
+    if(bar) bar.setAttribute("aria-valuenow",String(pct(mc)));
+  });
+  document.querySelectorAll('[data-scount]').forEach(el=>{
+    const ids=el.getAttribute('data-scount').split(',');
+    const sub=ids.map(id=>({id})); const c=counts(sub);
+    el.textContent=c.done+"/"+c.total;
+  });
+  updateReadiness();
+}
+
+// recompute dependency readiness badges + dep-chip met/unmet, and tag each row for filtering
+function updateReadiness(){
+  allTasks().forEach(t=>{
+    const li=document.querySelector('li.task[data-tid="'+CSS.escape(t.id)+'"]');
+    if(!li) return;
+    const st=getTask(t.id).status;
+    const r=readiness(t.id);
+    li.dataset.ready = r.ready ? "1":"0";
+    const badge=li.querySelector('[data-ready]');
+    if(badge){
+      if(st==="done"){ badge.className="ready isdone"; badge.textContent="✓ done"; }
+      else if(r.ready){ badge.className="ready go"; badge.textContent=depsOf(t.id).length? "▶ ready":"▶ ready (no deps)"; }
+      else { badge.className="ready wait"; badge.textContent="⏳ waiting on "+r.unmet.length; }
+    }
+    li.querySelectorAll('[data-dep]').forEach(c=>{
+      const d=c.dataset.dep; const met=TASK_BY_ID[d] && getTask(d).status==="done";
+      c.className="depchip "+(met?"met":"unmet");
+      c.textContent=(met?"✓ ":"")+d;
+    });
+  });
+}
+
+function scrollToTask(id){
+  const li=document.querySelector('li.task[data-tid="'+CSS.escape(id)+'"]');
+  if(!li){ announce("Task "+id+" not found."); return; }
+  // open ancestors so it's visible even if collapsed/filtered
+  let p=li.parentElement;
+  while(p){ if(p.tagName==="DETAILS") p.open=true; p=p.parentElement; }
+  li.classList.remove("hide");
+  li.scrollIntoView({behavior:"smooth", block:"center"});
+  li.classList.remove("flash"); void li.offsetWidth; li.classList.add("flash");
+  announce("Jumped to "+id);
+}
+
+/* ============================ RENDER ============================ */
+function chip(cls, text, title){
+  const s=document.createElement("span"); s.className="chip "+cls; s.textContent=text;
+  if(title) s.title=title; return s;
+}
+
+function render(){
+  const tree=$("tree"); tree.textContent="";
+  CONTENT.modules.forEach(m=>{
+    const det=document.createElement("details"); det.className="mod"; det.open=true; det.dataset.mod=m.id;
+    const sum=document.createElement("summary"); sum.className="modhead";
+    const mi=document.createElement("span"); mi.className="mi"; mi.textContent=m.id.toUpperCase();
+    const mt=document.createElement("span"); mt.className="mt"; mt.textContent=m.title;
+    const trackWrap=document.createElement("span"); trackWrap.className="track mtrack";
+    const f=document.createElement("div"); f.className="fill"; f.dataset.mfill=m.id; trackWrap.appendChild(f);
+    const mc=document.createElement("span"); mc.className="mc"; mc.dataset.mcount=m.id;
+    const bar=document.createElement("span"); bar.setAttribute("role","progressbar");
+    bar.setAttribute("aria-label",m.title+" progress"); bar.setAttribute("aria-valuemin","0");
+    bar.setAttribute("aria-valuemax","100"); bar.setAttribute("aria-valuenow","0");
+    bar.dataset.mbar=m.id; bar.className="sr-only";
+    sum.append(mi,mt,trackWrap,mc,bar);
+    det.appendChild(sum);
+
+    m.subs.forEach(s=>{
+      const sd=document.createElement("details"); sd.className="sm"; sd.open=true;
+      const ss=document.createElement("summary"); ss.className="subhead";
+      const mk=document.createElement("span"); mk.className="marker"; mk.textContent="▶";
+      const st=document.createElement("span"); st.className="st"; st.textContent=s.title;
+      const sc=document.createElement("span"); sc.className="sc"; sc.dataset.scount=s.tasks.map(t=>t.id).join(",");
+      ss.append(mk,st,sc); sd.appendChild(ss);
+
+      const ul=document.createElement("ul"); ul.className="tasks";
+      s.tasks.forEach(t=>ul.appendChild(renderTask(t)));
+      sd.appendChild(ul);
+      det.appendChild(sd);
+    });
+    tree.appendChild(det);
+  });
+  updateProgress();
+  applyFilters();
+}
+
+function renderTask(t){
+  const st=getTask(t.id);
+  const li=document.createElement("li"); li.className="task"; li.dataset.tid=t.id;
+  li.dataset.p=t.p; li.dataset.crit=t.crit?"1":"0";
+
+  // checkbox (done shortcut)
+  const cw=document.createElement("span"); cw.className="tk-check";
+  const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=(st.status==="done");
+  cb.setAttribute("aria-label","Mark done: "+t.t);
+  cb.addEventListener("change",()=>{ setStatus(t.id, cb.checked?"done":"todo"); });
+  cw.appendChild(cb);
+
+  const main=document.createElement("div"); main.className="tk-main";
+  const title=document.createElement("div"); title.className="tk-title"+(st.status==="done"?" done":"");
+  title.dataset.title="1"; title.textContent=t.t;
+  main.appendChild(title);
+
+  const meta=document.createElement("div"); meta.className="tk-meta";
+  meta.appendChild(chip("p"+t.p.slice(1).toLowerCase(), t.p));
+  if(t.crit) meta.appendChild(chip("crit","⚠ security-critical"));
+  if(t.inferred) meta.appendChild(chip("inf","inferred","Why inferred: "+t.inferred));
+  const ref=document.createElement("span"); ref.className="ref"; ref.textContent=t.ref; meta.appendChild(ref);
+
+  // status select
+  const stWrap=document.createElement("span"); stWrap.className="tk-status";
+  const sel=document.createElement("select"); sel.setAttribute("aria-label","Status: "+t.t);
+  STATUSES.forEach(s=>{ const o=document.createElement("option"); o.value=s;
+    o.textContent=STATUS_GLYPH[s]+" "+STATUS_LABEL[s]; if(s===st.status) o.selected=true; sel.appendChild(o); });
+  sel.className="s-"+st.status;
+  sel.addEventListener("change",()=>setStatus(t.id, sel.value));
+  stWrap.appendChild(sel); meta.appendChild(stWrap);
+  main.appendChild(meta);
+
+  // dependencies + readiness
+  const dl=document.createElement("div"); dl.className="tk-deps";
+  const badge=document.createElement("span"); badge.className="ready"; badge.dataset.ready=t.id;
+  dl.appendChild(badge);
+  const deps=depsOf(t.id);
+  if(deps.length){
+    const lbl=document.createElement("span"); lbl.className="dlbl"; lbl.textContent="needs:"; dl.appendChild(lbl);
+    deps.forEach(d=>{
+      const c=document.createElement("button"); c.type="button"; c.className="depchip"; c.dataset.depfor=t.id; c.dataset.dep=d;
+      const info=TASK_BY_ID[d];
+      c.title=(info? info.task.t : d)+(info?"":"  [UNKNOWN ID]");
+      c.addEventListener("click",()=>scrollToTask(d));
+      dl.appendChild(c);
+    });
+  }
+  main.appendChild(dl);
+
+  // notes
+  const nw=document.createElement("div"); nw.className="tk-notes";
+  const ta=document.createElement("textarea"); ta.value=st.notes; ta.placeholder="Notes…";
+  ta.setAttribute("aria-label","Notes: "+t.t);
+  const sv=document.createElement("span"); sv.className="savestate"; sv.setAttribute("aria-live","off");
+  let nTimer=null;
+  ta.addEventListener("input",()=>{
+    sv.textContent="saving…"; sv.className="savestate saving";
+    if(nTimer) clearTimeout(nTimer);
+    nTimer=setTimeout(()=>{
+      getTask(t.id).notes=ta.value;
+      const ok=saveState();
+      serverPushTask(t.id);
+      if(ok||serverMode){ sv.textContent="saved"; sv.className="savestate saved"; }
+      else { sv.textContent=(savingDisabled||!storageOK)?"not saved":"error"; sv.className="savestate error"; }
+      setTimeout(()=>{ if(sv.textContent==="saved"){ sv.textContent=""; sv.className="savestate"; } },1400);
+    },400);
+  });
+  nw.append(ta,sv); main.appendChild(nw);
+
+  li.append(cw,main);
+  return li;
+}
+
+function setStatus(id, status){
+  getTask(id).status=status;
+  saveState();
+  serverPushTask(id);
+  // update just this row + progress
+  const li=document.querySelector('li.task[data-tid="'+CSS.escape(id)+'"]');
+  if(li){
+    const cb=li.querySelector('.tk-check input'); if(cb) cb.checked=(status==="done");
+    const sel=li.querySelector('.tk-status select'); if(sel){ sel.value=status; sel.className="s-"+status; }
+    const title=li.querySelector('[data-title]'); if(title) title.className="tk-title"+(status==="done"?" done":"");
+  }
+  updateProgress();
+  applyFilters();
+  announce(STATUS_LABEL[status]+".");
+}
+
+/* ============================ FILTERS ============================ */
+function applyFilters(){
+  const onlyP1=$("fP1").checked, onlyCrit=$("fCrit").checked, hideDone=$("fHideDone").checked,
+        onlyReady=$("fReady").checked, onlyBlocked=$("fBlocked").checked;
+  let shown=0, hidden=0;
+  document.querySelectorAll('li.task').forEach(li=>{
+    const id=li.dataset.tid;
+    const isDone=getTask(id).status==="done";
+    let vis=true;
+    if(onlyP1 && li.dataset.p!=="P1") vis=false;
+    if(onlyCrit && li.dataset.crit!=="1") vis=false;
+    if(hideDone && isDone) vis=false;
+    // "Ready now" = not done AND all deps done; "Waiting on deps" = not done AND some dep open
+    if(onlyReady && (isDone || li.dataset.ready!=="1")) vis=false;
+    if(onlyBlocked && (isDone || li.dataset.ready==="1")) vis=false;
+    li.classList.toggle("hide", !vis);
+    if(vis) shown++; else hidden++;
+  });
+  // hide empty submodules/modules for tidiness
+  document.querySelectorAll('details.sm').forEach(sd=>{
+    const any=sd.querySelectorAll('li.task:not(.hide)').length>0;
+    sd.classList.toggle("hide", !any);
+  });
+  document.querySelectorAll('details.mod').forEach(md=>{
+    const any=md.querySelectorAll('li.task:not(.hide)').length>0;
+    md.classList.toggle("hide", !any);
+  });
+  const fc=$("filtCount");
+  if(onlyP1||onlyCrit||hideDone||onlyReady||onlyBlocked){ fc.textContent="filtered: showing "+shown+" of "+(shown+hidden)+" tasks (headline bars still count all)"; }
+  else fc.textContent="";
+}
+
+/* ============================ EXPORT / IMPORT / RESET ============================ */
+function exportState(filenameHint){
+  const payload=JSON.stringify({ schemaVersion:SCHEMA_VERSION, contentVersion:CONTENT.contentVersion,
+    generatedFrom:CONTENT.generatedFrom, exportedFrom:"ProjectPlan.html", tasks:state.tasks }, null, 2);
+  const blob=new Blob([payload],{type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a"); a.href=url;
+  a.download=filenameHint||"siteagent-projectplan-progress.json";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1500);
+  announce("Progress exported.");
+}
+
+function importStateFromText(text){
+  let parsed;
+  try { parsed=JSON.parse(text); }
+  catch(e){ addBanner("err","✕ Import failed: the file is not valid JSON. Nothing was changed."); return; }
+  if(!isValidState(parsed)){ addBanner("err","✕ Import failed: unrecognized format (missing tasks/schemaVersion). Nothing was changed."); return; }
+  const { clean, dropped }=sanitizeTasks(parsed.tasks);
+  // merge by task id (imported wins for known ids)
+  let merged=0;
+  for(const id in clean){ state.tasks[id]=clean[id]; merged++; }
+  saveState(); serverPushBulk(false); render();
+  let msg="✓ Imported "+merged+" task state(s) (merged by id).";
+  if(dropped>0) msg+=" "+dropped+" unknown id(s) ignored.";
+  if(typeof parsed.contentVersion==="number" && parsed.contentVersion!==CONTENT.contentVersion)
+    msg+=" Note: imported file was content v"+parsed.contentVersion+" (this file is v"+CONTENT.contentVersion+").";
+  addBanner("warn",msg,[{label:"Dismiss",fn:(b)=>b.remove()}]);
+  announce("Import complete.");
+}
+
+/* ============================ A11Y announce ============================ */
+let annTimer=null;
+function announce(msg){ const r=$("liveRegion"); if(!r) return; r.textContent=""; if(annTimer) clearTimeout(annTimer);
+  annTimer=setTimeout(()=>{ r.textContent=msg; },30); }
+
+/* ============================ COVERAGE TABLE ============================ */
+function renderCoverage(){
+  const wrap=$("covWrap");
+  function tbl(caption, rows){
+    const t=document.createElement("table");
+    const cap=document.createElement("caption"); cap.textContent=caption; t.appendChild(cap);
+    const thead=document.createElement("thead"); thead.innerHTML="<tr><th>Source</th><th>Covered by task(s)</th></tr>"; t.appendChild(thead);
+    const tb=document.createElement("tbody");
+    rows.forEach(r=>{ const tr=document.createElement("tr");
+      const a=document.createElement("td"); a.textContent=r[0];
+      const b=document.createElement("td"); b.className="ref"; b.textContent=r[1];
+      tr.append(a,b); tb.appendChild(tr); });
+    t.appendChild(tb); return t;
+  }
+  wrap.appendChild(tbl("Architecture.md contracts", COVERAGE.contracts));
+  const sp1=document.createElement("div"); sp1.style.height="12px"; wrap.appendChild(sp1);
+  wrap.appendChild(tbl("UserFlow.md flows", COVERAGE.flows));
+  const sp2=document.createElement("div"); sp2.style.height="12px"; wrap.appendChild(sp2);
+  const oos=document.createElement("table");
+  oos.innerHTML="<caption>Explicitly out of scope (v1)</caption><thead><tr><th>Item</th></tr></thead>";
+  const tb=document.createElement("tbody");
+  COVERAGE.outOfScope.forEach(x=>{ const tr=document.createElement("tr"); const td=document.createElement("td"); td.textContent=x; tr.appendChild(td); tb.appendChild(tr); });
+  oos.appendChild(tb); wrap.appendChild(oos);
+}
+
+/* ============================ BUILD WAVES ============================ */
+const PRI_ORDER={P1:0,P2:1,P3:2};
+function renderWaves(){
+  const body=$("wavesBody"); body.textContent="";
+  const waves={};
+  allTaskIds().forEach(id=>{ const w=depthOf(id); (waves[w]=waves[w]||[]).push(id); });
+  Object.keys(waves).map(Number).sort((a,b)=>a-b).forEach(w=>{
+    const ids=waves[w].sort((a,b)=>{
+      const pa=PRI_ORDER[TASK_BY_ID[a].task.p], pb=PRI_ORDER[TASK_BY_ID[b].task.p];
+      if(pa!==pb) return pa-pb; return a.localeCompare(b);
+    });
+    const box=document.createElement("div"); box.className="wave";
+    const h=document.createElement("div"); h.className="wh";
+    h.textContent="Wave "+w+" — "+ids.length+" task"+(ids.length===1?"":"s")+(w===0?" (no prerequisites — start here)":"");
+    box.appendChild(h);
+    const ul=document.createElement("ul");
+    ids.forEach(id=>{
+      const info=TASK_BY_ID[id]; const li=document.createElement("li");
+      const a=document.createElement("span"); a.className="wid"; a.textContent=id;
+      a.title="Jump to task"; a.addEventListener("click",()=>scrollToTask(id));
+      const c=document.createElement("span"); c.appendChild(chip("p"+info.task.p.slice(1).toLowerCase(), info.task.p));
+      const tt=document.createElement("span"); tt.textContent=info.task.t+"  ·  "+info.mod;
+      li.append(a,c.firstChild,tt); ul.appendChild(li);
+    });
+    box.appendChild(ul); body.appendChild(box);
+  });
+}
+
+/* ============================ BOOT ============================ */
+function boot(){
+  $("ver").textContent="v"+CONTENT.contentVersion;
+  $("gen").textContent=CONTENT.generatedFrom;
+
+  // Duplicate-id guard (Codex R1 #6)
+  const ids=allTaskIds(); const seen=new Set(); const dupes=new Set();
+  ids.forEach(id=>{ if(seen.has(id)) dupes.add(id); seen.add(id); });
+  if(dupes.size>0){
+    savingDisabled=true;
+    addBanner("err","✕ <strong>Duplicate task id(s):</strong> "+[...dupes].join(", ")+
+      ". Saving is disabled to avoid corrupting progress — fix the TASKS data (ids must be unique).");
+  }
+
+  // Dependency-graph guard (Diagrams.md/UserFlow.md derived)
+  const dv=validateDeps();
+  if(dv.missing.length){
+    DEP_VALID=false;
+    addBanner("err","✕ <strong>Dependency references unknown task id(s):</strong> "+dv.missing.slice(0,8).join(", ")+
+      (dv.missing.length>8?" …(+"+(dv.missing.length-8)+" more)":"")+". Fix the DEPS map.");
+  }
+  if(dv.cycles.length){
+    DEP_VALID=false;
+    addBanner("err","✕ <strong>Dependency cycle(s) detected:</strong> "+dv.cycles.slice(0,4).join("  |  ")+
+      ". Build waves/readiness may be unreliable until resolved.");
+  }
+
+  loadState();
+  render();
+  renderCoverage();
+  renderWaves();
+
+  $("fP1").addEventListener("change",applyFilters);
+  $("fCrit").addEventListener("change",applyFilters);
+  $("fHideDone").addEventListener("change",applyFilters);
+  $("fReady").addEventListener("change",applyFilters);
+  $("fBlocked").addEventListener("change",applyFilters);
+  $("expandAll").addEventListener("click",()=>document.querySelectorAll('details').forEach(d=>d.open=true));
+  $("collapseAll").addEventListener("click",()=>document.querySelectorAll('details.mod,details.sm').forEach(d=>d.open=false));
+  $("btnExport").addEventListener("click",()=>exportState());
+  $("btnImport").addEventListener("click",()=>$("fileImport").click());
+  $("fileImport").addEventListener("change",(e)=>{
+    const file=e.target.files && e.target.files[0]; if(!file) return;
+    const fr=new FileReader(); fr.onload=()=>importStateFromText(String(fr.result)); fr.onerror=()=>addBanner("err","✕ Could not read the file.");
+    fr.readAsText(file); e.target.value="";
+  });
+  $("btnReset").addEventListener("click",()=>{
+    if(!confirm("Reset ALL progress (status + notes for every task)? This can't be undone.\n\nTip: you'll be offered an export backup first.")) return;
+    if(confirm("Download a backup export before resetting? (Recommended)")) exportState("siteagent-projectplan-backup-before-reset.json");
+    state.tasks={}; saveState(); serverPushBulk(true); render(); announce("All progress reset.");
+  });
+
+  serverInit(); // if served by server.js, switch to shared multi-user mode
+}
+document.addEventListener("DOMContentLoaded",boot);
+</script>
+</body>
+</html>
