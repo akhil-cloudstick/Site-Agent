@@ -171,6 +171,7 @@ export interface Tenant {
   name: string;
   slug: string;
   status: 'provisioning' | 'active' | 'suspended' | 'failed';
+  liveUrl?: string | null;
   githubRepo?: string | null;
   deployTargets?:
     | {
@@ -190,6 +191,7 @@ export interface Tenant {
  */
 export interface Media {
   id: number;
+  tenant?: (number | null) | Tenant;
   alt: string;
   updatedAt: string;
   createdAt: string;
@@ -239,13 +241,138 @@ export interface Page {
   tenant?: (number | null) | Tenant;
   changeSetId: number | Changeset;
   title: string;
-  hero?: {
-    heading?: string | null;
-    subheading?: string | null;
+  slug?: string | null;
+  navLabel?: string | null;
+  navOrder?: number | null;
+  theme?: {
+    primaryColor?: string | null;
+    font?: ('sans' | 'serif') | null;
   };
+  layout?:
+    | (HeroBlock | FeaturesBlock | ProductsBlock | TestimonialsBlock | CtaBlock | ContactBlock | RichTextBlock)[]
+    | null;
+  previousLayout?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
   updatedAt: string;
   createdAt: string;
   _status?: ('draft' | 'published') | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "HeroBlock".
+ */
+export interface HeroBlock {
+  heading?: string | null;
+  subheading?: string | null;
+  image?: (number | null) | Media;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'hero';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "FeaturesBlock".
+ */
+export interface FeaturesBlock {
+  heading?: string | null;
+  image?: (number | null) | Media;
+  items?:
+    | {
+        title?: string | null;
+        text?: string | null;
+        image?: (number | null) | Media;
+        id?: string | null;
+      }[]
+    | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'features';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "ProductsBlock".
+ */
+export interface ProductsBlock {
+  heading?: string | null;
+  image?: (number | null) | Media;
+  items?:
+    | {
+        name?: string | null;
+        description?: string | null;
+        price?: string | null;
+        oldPrice?: string | null;
+        badge?: string | null;
+        buttonLabel?: string | null;
+        image?: (number | null) | Media;
+        id?: string | null;
+      }[]
+    | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'products';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TestimonialsBlock".
+ */
+export interface TestimonialsBlock {
+  heading?: string | null;
+  image?: (number | null) | Media;
+  items?:
+    | {
+        quote?: string | null;
+        author?: string | null;
+        image?: (number | null) | Media;
+        id?: string | null;
+      }[]
+    | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'testimonials';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "CtaBlock".
+ */
+export interface CtaBlock {
+  heading?: string | null;
+  buttonLabel?: string | null;
+  image?: (number | null) | Media;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'cta';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "ContactBlock".
+ */
+export interface ContactBlock {
+  heading?: string | null;
+  text?: string | null;
+  buttonLabel?: string | null;
+  image?: (number | null) | Media;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'contact';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "RichTextBlock".
+ */
+export interface RichTextBlock {
+  heading?: string | null;
+  body?: string | null;
+  image?: (number | null) | Media;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'richText';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -368,6 +495,7 @@ export interface UsersSelect<T extends boolean = true> {
  * via the `definition` "media_select".
  */
 export interface MediaSelect<T extends boolean = true> {
+  tenant?: T;
   alt?: T;
   updatedAt?: T;
   createdAt?: T;
@@ -389,6 +517,7 @@ export interface TenantsSelect<T extends boolean = true> {
   name?: T;
   slug?: T;
   status?: T;
+  liveUrl?: T;
   githubRepo?: T;
   deployTargets?: T;
   updatedAt?: T;
@@ -420,15 +549,133 @@ export interface PagesSelect<T extends boolean = true> {
   tenant?: T;
   changeSetId?: T;
   title?: T;
-  hero?:
+  slug?: T;
+  navLabel?: T;
+  navOrder?: T;
+  theme?:
     | T
     | {
-        heading?: T;
-        subheading?: T;
+        primaryColor?: T;
+        font?: T;
       };
+  layout?:
+    | T
+    | {
+        hero?: T | HeroBlockSelect<T>;
+        features?: T | FeaturesBlockSelect<T>;
+        products?: T | ProductsBlockSelect<T>;
+        testimonials?: T | TestimonialsBlockSelect<T>;
+        cta?: T | CtaBlockSelect<T>;
+        contact?: T | ContactBlockSelect<T>;
+        richText?: T | RichTextBlockSelect<T>;
+      };
+  previousLayout?: T;
   updatedAt?: T;
   createdAt?: T;
   _status?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "HeroBlock_select".
+ */
+export interface HeroBlockSelect<T extends boolean = true> {
+  heading?: T;
+  subheading?: T;
+  image?: T;
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "FeaturesBlock_select".
+ */
+export interface FeaturesBlockSelect<T extends boolean = true> {
+  heading?: T;
+  image?: T;
+  items?:
+    | T
+    | {
+        title?: T;
+        text?: T;
+        image?: T;
+        id?: T;
+      };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "ProductsBlock_select".
+ */
+export interface ProductsBlockSelect<T extends boolean = true> {
+  heading?: T;
+  image?: T;
+  items?:
+    | T
+    | {
+        name?: T;
+        description?: T;
+        price?: T;
+        oldPrice?: T;
+        badge?: T;
+        buttonLabel?: T;
+        image?: T;
+        id?: T;
+      };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TestimonialsBlock_select".
+ */
+export interface TestimonialsBlockSelect<T extends boolean = true> {
+  heading?: T;
+  image?: T;
+  items?:
+    | T
+    | {
+        quote?: T;
+        author?: T;
+        image?: T;
+        id?: T;
+      };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "CtaBlock_select".
+ */
+export interface CtaBlockSelect<T extends boolean = true> {
+  heading?: T;
+  buttonLabel?: T;
+  image?: T;
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "ContactBlock_select".
+ */
+export interface ContactBlockSelect<T extends boolean = true> {
+  heading?: T;
+  text?: T;
+  buttonLabel?: T;
+  image?: T;
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "RichTextBlock_select".
+ */
+export interface RichTextBlockSelect<T extends boolean = true> {
+  heading?: T;
+  body?: T;
+  image?: T;
+  id?: T;
+  blockName?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

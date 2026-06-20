@@ -8,9 +8,13 @@ import { MODEL_CONFIG } from './model'
  */
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
 
+export type ContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } }
+
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant'
-  content: string
+  content: string | ContentPart[]
 }
 
 export interface CompletionResult {

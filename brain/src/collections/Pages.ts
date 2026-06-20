@@ -1,28 +1,28 @@
 import type { CollectionConfig } from 'payload'
 
+import { pageBlocks } from '../blocks'
 import { stampActiveChangeSet } from '../lib/changeset/stampActiveChangeSet'
 
 /**
  * Pages — tenant-scoped content. Every row carries a NOT NULL `tenant` and
- * `changeSetId` (DB-Architecture.md). `changeSetId` is `required` here, and
- * will be stamped automatically by the shared `beforeChange` hook in a later
- * task (m4-beforechange) so editors never set it by hand. Drafts/versions are
- * on so content accumulates as drafts until Publish.
+ * `changeSetId` (stamped by the `beforeValidate` hook). Drafts/versions on.
  *
- * Slice 1 keeps the content model intentionally tiny (a hero) — the real
- * Section-primitive page-builder blocks are a later module.
+ * Content is the dynamic `layout` — an ordered list of section blocks (hero,
+ * features, testimonials, cta, contact, richText), any number in any order.
+ * `theme` styles the whole page.
+ *
+ * NOTE: the old fixed group fields (hero/features/cta/testimonials/contact) are
+ * kept temporarily so the migration is additive (no interactive rename prompt);
+ * they are unused by the app now and get dropped in a later cleanup migration.
  */
 export const Pages: CollectionConfig = {
   slug: 'pages',
   admin: { useAsTitle: 'title' },
   versions: { drafts: true },
   hooks: {
-    // Forces every write into the Tenant's active ChangeSet (or rejects it).
     beforeValidate: [stampActiveChangeSet],
   },
   fields: [
-    // `tenant` is added automatically by the multi-tenant plugin (do not add it
-    // here — that would duplicate the field). See payload.config.ts.
     {
       name: 'changeSetId',
       type: 'relationship',
@@ -31,13 +31,27 @@ export const Pages: CollectionConfig = {
       index: true,
     },
     { name: 'title', type: 'text', required: true },
+    // The page's route key within the site: 'home' => /, 'about' => /about.
+    { name: 'slug', type: 'text', index: true },
+    // Label shown for this page in the site's nav menu.
+    { name: 'navLabel', type: 'text' },
+    // Position of this page in the nav menu (lower = earlier).
+    { name: 'navOrder', type: 'number', defaultValue: 0 },
     {
-      name: 'hero',
+      name: 'theme',
       type: 'group',
       fields: [
-        { name: 'heading', type: 'text' },
-        { name: 'subheading', type: 'text' },
+        { name: 'primaryColor', type: 'text' },
+        { name: 'font', type: 'select', options: ['sans', 'serif'], defaultValue: 'sans' },
       ],
     },
+    // The dynamic stack of sections (the model the app uses).
+    {
+      name: 'layout',
+      type: 'blocks',
+      blocks: pageBlocks,
+    },
+    // Snapshot of the layout before the most recent change — powers one-level Undo.
+    { name: 'previousLayout', type: 'json', admin: { hidden: true } },
   ],
 }

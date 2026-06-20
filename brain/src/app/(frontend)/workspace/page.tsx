@@ -1,7 +1,8 @@
 import { headers as nextHeaders } from 'next/headers'
 
 import { getSessionUser, tenantIdOfUser } from '@/auth/session'
-import { loadPreviewDto } from '@/workspace/preview'
+import { getTenantLiveUrl } from '@/publish/publish'
+import { loadWorkspaceDto } from '@/workspace/preview'
 
 import { LoginForm } from './LoginForm'
 import { WorkspaceClient } from './WorkspaceClient'
@@ -29,7 +30,8 @@ export default async function WorkspacePage() {
 
   // In-Brain preview: tenant derived from the SESSION (never client input),
   // and only allowlisted public fields are exposed (a public DTO).
-  const preview = await loadPreviewDto(tenantId)
+  const workspace = await loadWorkspaceDto(tenantId)
+  const liveUrl = await getTenantLiveUrl(tenantId)
 
-  return <WorkspaceClient userEmail={user.email} preview={preview} />
+  return <WorkspaceClient userEmail={user.email} workspace={workspace} initialLiveUrl={liveUrl} />
 }

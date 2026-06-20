@@ -87,7 +87,7 @@ export async function applyContentWrite<T>(
 }
 
 /** Read a tenant's pages as its service principal (tenant-scoped, overrideAccess:false). */
-export async function listTenantPages(tenantId: number) {
+export async function listTenantPages(tenantId: number, depth = 0) {
   const payload = await getBrokerClient()
   const principal = await resolveServicePrincipal(payload, tenantId)
   const res = await payload.find({
@@ -96,9 +96,56 @@ export async function listTenantPages(tenantId: number) {
     overrideAccess: false,
     draft: true,
     limit: 50,
-    depth: 0,
+    sort: 'navOrder',
+    depth,
   })
   return res.docs
+}
+
+/** Create a new page for a tenant through the safe write path (auto-opens a ChangeSet, draft). */
+export async function createTenantPage(
+  tenantId: number,
+  data: { title: string; slug: string; navLabel?: string; navOrder?: number; layout?: unknown[] },
+) {
+  return applyContentWrite(tenantId, (payload, principal) =>
+    payload.create({
+      collection: 'pages',
+      data: { ...data, tenant: tenantId } as any,
+      user: principal,
+      overrideAccess: false,
+      draft: true,
+    }),
+  )
+}
+
+/** Delete one of a tenant's pages through the safe write path (auto-opens a ChangeSet). */
+export async function deleteTenantPage(tenantId: number, pageId: number) {
+  return applyContentWrite(tenantId, (payload, principal) =>
+    payload.delete({
+      collection: 'pages',
+      id: pageId,
+      user: principal,
+      overrideAccess: false,
+    }),
+  )
+}
+
+/** Upload an image for a tenant (stored locally in dev; on R2 once deployed). Tenant-scoped. */
+export async function uploadTenantMedia(
+  tenantId: number,
+  file: { buffer: Buffer; filename: string; mimetype: string; alt: string },
+) {
+  const payload = await getBrokerClient()
+  const principal = await resolveServicePrincipal(payload, tenantId)
+  return payload.create({
+    collection: 'media',
+    // The multi-tenant plugin requires the tenant; set it explicitly (it isn't
+    // auto-filled on a Local-API create).
+    data: { alt: file.alt, tenant: tenantId } as any,
+    file: { data: file.buffer, mimetype: file.mimetype, name: file.filename, size: file.buffer.length },
+    user: principal,
+    overrideAccess: false,
+  })
 }
 
 /** Update one of a tenant's pages through the safe write path (auto-opens a ChangeSet, draft). */

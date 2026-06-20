@@ -1,6 +1,81 @@
 # Changelog
 
+## 2026-06-20
+
+**`06:50 PM`**
+- **"Add a new page" in chat now actually adds a page.** Before, typing something like *"add new page Product"* into the chat was treated as a content edit and dumped a products section onto the page you were already on. The chat now recognises a clear page-creation request ("add / create / make a new page X", "new page: About") and creates a brand-new page named X — then drops you onto it so you can fill it in. It's deliberately careful: ordinary edits like *"add a hero to the page"* or *"add a products section"* still edit the current page as before. New pages created this way use the exact same naming/slug logic as the "+ Add page" button.
+- **Responsive workspace header ("top hat").** The chat panel's top bar (Signed-in email · live URL · Publish · Sign out) used to overflow and get cramped when the chat panel was made narrow. It now wraps cleanly onto a second row, with the email truncating gracefully, so everything stays reachable at any panel width.
+
+**`08:35 PM`**
+- **Live URL is now captured, saved, and always shown.** Fixed a bug where a *successful* Cloudflare publish was mis-read as a failure (the URL has two subdomain parts and the matcher only allowed one). Now Publish returns the clean public address, **saves it on the customer's record**, and shows it **persistently in the workspace header** (e.g. `siteagent-acme.pages.dev ↗`) — so the customer can always open their live site, even after a refresh. Also made the publish chat reply **short and standard** ("Your site is now live.") instead of dumping the raw deploy log; any real error is logged server-side and the customer just sees "Publishing failed. Please try again."
+
+**`08:05 PM`**
+- **Real publishing to Cloudflare (step 4 — going live for real).** Publish now does the whole pipeline: freeze the draft → render the site to a self-contained static website (HTML per page + copied images) → upload it to the customer's own Cloudflare Pages project via direct upload → return the real public URL (`siteagent-<customer>.pages.dev`). No GitHub needed for this path. When Cloudflare isn't configured it falls back to the local `/site/<customer>` preview, so nothing breaks. Cloudflare credentials are read through the same safe config seam (optional). Verified the static-site render + export end to end; the live upload runs once the Cloudflare token is in place.
+
+**`07:20 PM`**
+- **Publish (step 1 — going live, local).** Added a green **Publish** button in the workspace: it freezes the current draft as the live version, and the customer's site is then viewable at a public, no-login URL — `/site/<customer>` (e.g. `/site/acme`) — rendering the published pages, nav, sections, images, and theme exactly as a visitor sees them. A **"View live site"** link appears after publishing. This is the full **edit → preview → LIVE** loop working on `localhost` today; the next step wires the same output to Cloudflare for a real public web address. Verified publish + public render end to end.
+
+**`06:35 PM`**
+- **Flexible Product cards** (per the "give a reference, match it" goal — done the safe way with configurable sections, not free-form code). The product card now has a **description**, and price / old-price / badge / button are all **optional** — so the same card renders as a plain *image + name + description* card (matching a simple catalog) or a full shop card. Add the extra fields per card from its ⋯ menu ("Add price / badge / button") or by asking the AI; the AI now only fills the fields you ask for.
+- **Friendlier AI replies.** The agent now explains what it actually did in plain language ("Done — I changed your main heading to 'Welcome'.") instead of a generic "3 sections".
+- **Sent-message badges.** When you target a section (or attach an image) your sent chat message now shows it as a badge (e.g. "Section: Call to action"), so it's clear what the request applied to.
+- **Chat box polish.** Removed the scrollbar, shortened the placeholder to one line, and the box now grows automatically as you type (Enter sends, Shift+Enter new line). You can also paste an image straight into the chat.
+
+**`05:55 PM`**
+- **New "Product cards" section.** A proper e-commerce section: a grid of product cards, each with an image, name, price, a struck-through old price, a discount badge (e.g. "-30%"), and a button. Add it from "Add a section", or ask the AI ("add a products section with 3 products") — verified the AI fills name/price/old price/badge correctly. This is the right fit for shop/reference-image requests (instead of cramming products into a generic Features card). You still upload each product photo.
+- **Database safety hardening.** Made it impossible at the database level for a page to exist without an owner (added NOT-NULL on the page's tenant and change-batch links) — verified it doesn't affect normal editing.
+- **Working indicator.** The chat now shows a clean animated "working" indicator while the AI composes, instead of a static "Thinking…".
+
+**`05:20 PM`**
+- **Themed dialogs.** Replaced the browser's grey native pop-ups ("localhost:3000 says…") with clean in-app dialogs that match the project style — used for the delete-section confirm and the new-page name prompt (a proper input field, Enter to confirm, Esc/Cancel to dismiss, click-outside to close).
+
+**`05:00 PM`**
+- **Chat refinements.** Removed the redundant background-image upload button from the chat (images are now placed directly in the preview). The remaining attach button is for reference images and now also accepts **paste (Ctrl+V)** of an image straight into the chat. The chat box is now multi-line: **Enter sends, Shift+Enter adds a new line.**
+
+**`04:40 PM`**
+- **Professional UI pass.** Replaced the editing on/off control with a proper minimal **toggle switch** ("Edit mode"). Collapsed the per-section emoji buttons (point-AI / move / delete / image) into a single discreet **"⋯" menu** in each section and item corner — click to open a small options list (Edit with AI, Change/Remove background image, Move up/down, Delete), click outside to close. Removed the playful emoji throughout (image/attach buttons and chips now use clean line icons), to match the minimal, professional standard for the project.
+
+**`04:05 PM`**
+- **Edit-mode toggle.** Top-right of the preview there's now an **"✏️ Editing: ON / 👁 Preview only"** switch. ON shows all the editing controls (click-to-edit text, image/section buttons, add-section bar); OFF hides every control and shows the site exactly as a visitor would see it — a clean preview.
+- **Minimal icon controls.** The bulky "🖼 Change image / Add image / ✕" text buttons are now small icon-only buttons (🖼 to set, ✕ to remove; 🎯 ↑ ↓ 🗑 for sections) that only appear in edit mode.
+
+**`03:30 PM`**
+- **You can now fully build a page by hand, not only via the AI.** Every section has on-canvas controls: move up/down, delete, and **🎯 "Point AI here"** — and there's an **"Add a section"** bar (hero, features, testimonials, call-to-action, contact, text) plus **+ Add item / ✕** on feature and testimonial cards. So customers can shape the whole layout themselves.
+- **"Point AI here" + Alt+E shortcut.** Don't know what a section is called? Click **🎯 Point AI here** on it (or hover it and press **Alt+E**) — a chip shows "your next message edits the Hero section," and the AI applies your instruction to exactly that section, even if you just say "make this shorter."
+- **Undo.** An **↶ Undo** button reverts the last change to a page (one level; press again to redo). Works for AI edits, text edits, image changes, and add/remove/move section.
+- **Housekeeping:** removed the old unused fixed-section fields from the database now that everything runs on the dynamic layout.
+
+**`02:30 PM`**
+- **Images anywhere, placed by clicking.** Every section can now have its own background image, and feature/product cards can each have their own photo — not just the hero. To set one, the customer **clicks the image (or "Add image") right on the section/product in the preview**, picks a file, and it lands exactly where they clicked — so there's no need to know section names. If they don't like it there's a one-click **Undo** (revert to the previous image), and an **✕** to remove an image. Crucially, uploaded photos are **kept when the AI later edits the text** (verified: changed a section's heading and both the background and product images stayed). Removed the decorative browser dots from the address bar.
+
+**`12:58 PM`**
+- **Multi-page sites.** A customer's site can now have many pages (Home, About, Services…), not just one. In the workspace there's a row of page tabs with an **"+ Add page"** button, a fake browser **address bar** at the top of the preview showing the current page's route (e.g. `yoursite.com/about`), and a **navigation menu** rendered on the site once there's more than one page. Chat edits, click-to-edit, and image uploads all apply to whichever page you're viewing. Verified end to end (added an About page at `/about` and switched to it). Next: per-section background images.
+
+**`12:15 PM`**
+- Rebuilt the page to be **fully dynamic** — the product's real logic. A page is now an open-ended stack of sections (hero, features, testimonials, call-to-action, contact, text): any sections, any number of items, in any order. You can genuinely add more now — "add two more features" actually adds them (verified 3 → 5), add new sections, reorder, and restyle, all from a single chat request, and everything in the preview stays click-to-edit. This replaces the old fixed-slot sections.
+
+**`11:19 AM`**
+- More design power: two new sections — customer **Testimonials** and a **Contact** section — plus **theming** (the AI, or the customer, can change the site's accent colour and switch the font). Verified the AI added a full testimonials section and recoloured the theme to green in a single request. A page can now stack hero, features, testimonials, call-to-action, and contact — each editable and styled by the theme.
+
+**`10:46 AM`**
+- The AI can now *design*, not just reword. In a single request a customer can say "add a features section about our coffee shop" and the AI turns the section on and writes the heading plus all three columns at once — verified (one sentence produced 8 coordinated edits). It also works with an attached reference image. This is the core of the "AI builds your site" promise.
+
+**`10:22 AM`**
+- Pages are now real multi-section websites. On top of the hero, there's a 3-column "Features" section and a "Call to action" section with a button — and every piece is click-to-edit, just like the hero. The example site now shows all three sections stacked like a proper landing page. (Next: letting the AI add and fill a whole section from a single request.)
+
+**`10:02 AM`**
+- Fixed the hero section preview: an uploaded image now shows as a full-width background with the heading and subheading laid over it (a proper hero banner), instead of the image sitting on top of the text.
+
 ## 2026-06-19
+
+**`08:04 PM`**
+- Image features complete. Fixed the upload error (photos now save correctly, scoped to each customer). And the AI can now "see" images: a customer can attach a reference image (📎 button) and ask the AI to act on it — verified end-to-end (sent a coloured image, the AI read it and updated the page from what it saw). So images now work two ways: add a photo to the page (🖼), or show the AI a reference (📎).
+
+**`07:41 PM`**
+- Added direct "click-to-edit": in the live preview, a customer can click the heading or subheading and type a new value in place — the second way to edit (alongside chat), without touching the technical admin. It saves through the same safe, tracked path. So the workspace now offers all three: chat with the AI, click-to-edit, and image upload.
+
+**`07:15 PM`**
+- Added image upload (first stage): from the chat workspace a customer can upload a photo and it instantly appears on their site as the hero image, kept private to their own account. Stored on this machine for now (moves to cloud storage when we deploy). Next stage: letting the AI "see" an uploaded reference image to decide changes.
 
 **`06:18 PM`**
 - Locked down the safety architecture with an automatic guardrail: code can no longer sneak around the single audited content-write path (a lint rule enforces it). Also replaced the starter demo home page with a proper SiteAgent landing page. Lint passes clean and the app builds.

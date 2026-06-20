@@ -66,21 +66,52 @@ async function ensureTenant(payload: Payload, name: string, slug: string) {
     log.push(`created active changeset ${changeset.id} for ${name}`)
   }
 
+  const starterLayout = [
+    { blockType: 'hero', heading: `Welcome to ${name}`, subheading: 'Your new site' },
+    {
+      blockType: 'features',
+      heading: 'What we offer',
+      items: [
+        { title: 'Fast', text: 'Lightning-quick performance.' },
+        { title: 'Simple', text: 'Easy for anyone to use.' },
+        { title: 'Reliable', text: 'Always up and running.' },
+      ],
+    },
+    { blockType: 'cta', heading: 'Ready to get started?', buttonLabel: 'Contact us' },
+  ]
+
   const existingPage = await findOne(payload, 'pages', { tenant: { equals: tenant.id } })
   if (!existingPage) {
     await payload.create({
       collection: 'pages',
-      data: {
-        tenant: tenant.id,
-        changeSetId: changeset.id,
-        title: 'Home',
-        hero: { heading: `Welcome to ${name}`, subheading: 'Your new site' },
-      },
+      data: { tenant: tenant.id, changeSetId: changeset.id, title: 'Home', slug: 'home', navLabel: 'Home', navOrder: 0, layout: starterLayout } as any,
       draft: true,
       overrideAccess: true,
       context: { systemPurpose: 'bootstrap' },
     })
     log.push(`created starter page for ${name}`)
+  } else {
+    // Backfill without clobbering any existing content: only set the layout if
+    // it's empty, only set the route fields if the slug is missing.
+    const patch: Record<string, unknown> = {}
+    const ep = existingPage as any
+    if (!Array.isArray(ep.layout) || ep.layout.length === 0) patch.layout = starterLayout
+    if (!ep.slug) {
+      patch.slug = 'home'
+      patch.navLabel = 'Home'
+      patch.navOrder = 0
+    }
+    if (Object.keys(patch).length > 0) {
+      await payload.update({
+        collection: 'pages',
+        id: existingPage.id,
+        data: { changeSetId: changeset.id, ...patch } as any,
+        draft: true,
+        overrideAccess: true,
+        context: { systemPurpose: 'bootstrap' },
+      })
+      log.push(`backfilled page for ${name}`)
+    }
   }
 }
 

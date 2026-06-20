@@ -62,6 +62,7 @@ export default buildConfig({
     multiTenantPlugin<PayloadGeneratedConfig>({
       collections: {
         pages: {},
+        media: {},
       },
       userHasAccessToAllTenants: (user) => Boolean(user?.isOperator),
     }),

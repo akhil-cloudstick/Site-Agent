@@ -47,6 +47,28 @@ _Things we deliberately simplified or postponed so the build stays vertical-slic
   - [ ] **DB hardening not needed yet**: `m2-media-refs`, `m2-saga-checkpoints`, `m2-indexes` (hot-path tuning), `m2-rls`.
 - **Kept honest even in the skeleton (NOT deferred — these are load-bearing):** single audited Local-API adapter with `overrideAccess:false`, the `beforeChange` ChangeSet hook + system-write deny, the minimal-role service principal, `NOT NULL tenant` FK, the one-active-ChangeSet partial unique index, and cross-Tenant isolation tests.
 
+## Deprecated fixed page fields cleanup — DONE
+- ~~The old fixed group fields on `pages` (`hero`/`features`/`cta`/`testimonials`/`contact`)...~~ **Done 2026-06-20:** migration `20260620_095155_drop_deprecated_fields` dropped all the old fixed-section columns/tables; the app runs entirely on the dynamic `layout`.
+
+## Publishing — what the SIMPLE slice does vs what's owed _(2026-06-20)_
+- **Done (simple publish):** Publish freezes the draft → renders a self-contained static site (HTML + copied images) → deploys to the customer's own Cloudflare Pages project via Wrangler **direct upload** → saves + shows the live `*.pages.dev` URL. Real, working, $0. _(`publish.ts`, `export-site.ts`, `render-html.ts`, `deploy-cloudflare.ts`.)_
+- **Owed for production (the real Module 9 + others):**
+  - [ ] Full **publish saga** with rollback/compensation (`m9-*`) — protected merge, deploy-verify, publish-via-API last, abort/revert states. The slice has **no rollback**.
+  - [ ] **Snapshot sanitization** (`m9-materialize` C1) — the current static render exposes the public DTO but not the strict per-block allowlist + JSON-Schema + fail-closed posture.
+  - [ ] **Media on R2** (`m10-*`) — images are currently **copied into each static bundle**, not staged to R2 with reference-safe GC. Fine for small sites; R2 needed at scale.
+  - [ ] **Custom domains** — customers are on `*.pages.dev`; map their own domain via Cloudflare for sale-readiness.
+  - [ ] **The Brain itself is still localhost-only** (`m1-host-warm`) — customer *sites* are live on Cloudflare, but the *editing platform* must be deployed (Node host + Neon Postgres + R2) for real customers to use it.
+
+## Remaining LOCAL polish (no accounts needed)
+- [x] **`pages` NOT NULL hardening** (`m2-fk-constraints`): **Done 2026-06-20** — migration `20260620_120000_pages_not_null` sets `NOT NULL` on `pages.tenant_id` + `pages.change_set_id_id`; verified seed + structure write paths still pass.
+- [x] **Product cards section**: **Done 2026-06-20** — `products` block (image, name, price, oldPrice, badge, button); AI-composable, verified.
+- [ ] **Real token streaming** (`m6-sse`): a clean animated "working" indicator now shows while the AI runs, but true token/micro-state streaming (Thinking → Applying → Updating preview) over SSE is still pending.
+- [ ] **More section types**: a gallery (multi-image) would still round out common sites.
+
+## Design/Layout: dynamic blocks now; formal registry later
+- **What now (Phase 2 Stage 1):** a fixed, reliable set of sections (hero + 3-column features + call-to-action), each toggleable + editable, rendered in the in-Brain preview.
+- **Owed (the full `AgentPlan.md` Module 7 architecture):** the dynamic **Section-primitive registry** — arbitrary blocks in any order, the machine-readable per-primitive contract, CI/AST validation, and Astro section components for the real deployed sites. The fixed set is a pragmatic first version of "compose pre-approved sections."
+
 ## Data-model simplifications (Module 2, decided 2026-06-19)
 
 ### Using `tenant` as the Site id; no separate `siteId` column yet
@@ -61,8 +83,12 @@ _Things we deliberately simplified or postponed so the build stays vertical-slic
 - **What slice 1 does:** the audited adapter (`src/broker/adapter.ts`) ensures an active ChangeSet then writes, with a zero-write backstop to clean up a ghost ChangeSet if a first edit fails.
 - **Owed (with the Discard feature, Codex R2 #2/#3):** wrap ensure+write in ONE DB transaction under a per-Site Postgres advisory lock shared with Discard, so a write can't race a discard. Not needed for the single-user slice-1 loop; the race first exists when Discard lands.
 
-### Local dev workflow: stop the server before migrations
-- `payload migrate` JAMS while a `pnpm start`/`pnpm dev` server is running (they compete for the migration lock; observed multiple piled-up hung processes). **Rule: stop the running app before running migrations.** Also set `db.push: false` so scripts (`payload run`) never auto-sync schema and create stray `dev` migration entries. _(Surfaced 2026-06-19.)_
+### Migrations: root cause found & fixed
+- The `payload migrate` jams were caused by a stale `dev` row (batch `-1`) in `payload_migrations`, left by Payload's old auto-"push" mode. **Fixed:** set `db.push: false` (no more auto-push) and deleted the stale `dev` row. Migrations now run normally. Still good practice to stop the running app before migrating. _(Resolved 2026-06-19.)_
+
+### Image storage is local; cloud media deferred to deploy
+- **What now:** uploaded images are stored on the local machine (Payload's built-in upload storage) and are tenant-scoped; the hero image shows in the preview.
+- **Owed at deploy (Module 10):** move media to **Cloudflare R2** (private bucket for drafts + public for published), the draft-media proxy / signed access, random-nonce staging, and reference-safe GC. For local dev, media is served with simple authenticated read (not the full private-proxy posture yet).
 
 ### `pages` NOT NULL `tenant`/`changeSetId` + FK on-delete policy
 - **What slice 1 does:** `changesets.tenant` is `NOT NULL` (enforced). Payload makes draft-enabled `pages` relationship columns nullable; FKs default to `ON DELETE set null`.

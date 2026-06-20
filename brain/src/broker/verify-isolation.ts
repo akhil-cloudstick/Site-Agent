@@ -30,7 +30,7 @@ try {
   const pageA = await applyContentWrite(acme.id, (p, principal) =>
     p.create({
       collection: 'pages',
-      data: { tenant: acme.id, title: 'Adapter test', hero: {} },
+      data: { tenant: acme.id, title: 'Adapter test' },
       user: principal,
       overrideAccess: false,
       draft: true,
@@ -48,7 +48,7 @@ try {
   try {
     const bad = await payload.create({
       collection: 'pages',
-      data: { tenant: globex.id, title: 'Cross', hero: {} },
+      data: { tenant: globex.id, title: 'Cross' },
       user: acmePrincipal,
       overrideAccess: false,
       draft: true,
@@ -78,7 +78,7 @@ try {
   const pageD = await applyContentWrite(acme.id, (p, principal) =>
     p.create({
       collection: 'pages',
-      data: { tenant: acme.id, title: 'Ensure test', hero: {} },
+      data: { tenant: acme.id, title: 'Ensure test' },
       user: principal,
       overrideAccess: false,
       draft: true,

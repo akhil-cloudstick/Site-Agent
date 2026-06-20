@@ -37,7 +37,7 @@ try {
   try {
     const page = await payload.create({
       collection: 'pages',
-      data: { tenant: tenant.id, title: 'Hook test 1', hero: {} },
+      data: { tenant: tenant.id, title: 'Hook test 1' },
       user: editor,
       overrideAccess: false,
       draft: true,
@@ -58,7 +58,7 @@ try {
   try {
     await payload.create({
       collection: 'pages',
-      data: { tenant: tenant.id, title: 'Hook test 2', hero: {} },
+      data: { tenant: tenant.id, title: 'Hook test 2' },
       user: editor,
       overrideAccess: false,
       draft: true,
@@ -78,7 +78,7 @@ try {
   try {
     await payload.create({
       collection: 'pages',
-      data: { tenant: tenant.id, changeSetId: cs.id, title: 'Hook test 3', hero: {} },
+      data: { tenant: tenant.id, changeSetId: cs.id, title: 'Hook test 3' },
       overrideAccess: true,
       context: { systemPurpose: 'evil' },
     })

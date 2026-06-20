@@ -18,6 +18,8 @@ export const Tenants: CollectionConfig = {
       defaultValue: 'provisioning',
       options: ['provisioning', 'active', 'suspended', 'failed'],
     },
+    // The published site's public URL (set on a successful Cloudflare publish).
+    { name: 'liveUrl', type: 'text' },
     // Set later by real provisioning (Module 3); unused in slice 1.
     { name: 'githubRepo', type: 'text' },
     { name: 'deployTargets', type: 'json' },

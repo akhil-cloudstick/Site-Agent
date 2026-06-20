@@ -15,7 +15,7 @@
  * environment; `env` is the eagerly-validated singleton the app imports.
  */
 
-const SECRET_KEYS = ['DATABASE_URL', 'PAYLOAD_SECRET', 'OPENROUTER_API_KEY'] as const
+const SECRET_KEYS = ['DATABASE_URL', 'PAYLOAD_SECRET', 'OPENROUTER_API_KEY', 'CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN'] as const
 type EnvKey = (typeof SECRET_KEYS)[number]
 
 export interface AppEnv {
@@ -25,6 +25,9 @@ export interface AppEnv {
   readonly payloadSecret: string
   /** OpenRouter API key — powers the content agent. Optional until the agent runs. */
   readonly openRouterApiKey: string | undefined
+  /** Cloudflare account id + API token — optional; enable "publish to Cloudflare Pages". */
+  readonly cloudflareAccountId: string | undefined
+  readonly cloudflareApiToken: string | undefined
   /** Resolved Node environment. */
   readonly nodeEnv: 'development' | 'production' | 'test'
 }
@@ -55,6 +58,8 @@ export function parseEnv(source: Record<string, string | undefined>): AppEnv {
     databaseUrl: requireEnv('DATABASE_URL'),
     payloadSecret: requireEnv('PAYLOAD_SECRET'),
     openRouterApiKey: read('OPENROUTER_API_KEY'),
+    cloudflareAccountId: read('CLOUDFLARE_ACCOUNT_ID'),
+    cloudflareApiToken: read('CLOUDFLARE_API_TOKEN'),
     nodeEnv,
   }
 }

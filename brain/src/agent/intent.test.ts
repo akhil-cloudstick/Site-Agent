@@ -1,40 +1,74 @@
 import { describe, expect, it } from 'vitest'
 
-import { extractJsonObject, parseIntent } from './intent'
+import { detectNewPageIntent, extractJsonObject, parseLayout } from './intent'
 
-describe('parseIntent (strict closed intent schema)', () => {
-  it('accepts a valid intent', () => {
-    const r = parseIntent({ action: 'update_page_field', pageId: 1, field: 'hero.heading', value: 'Hi' })
+describe('parseLayout (dynamic layout, fail-closed)', () => {
+  it('accepts a valid multi-block layout with items and theme', () => {
+    const r = parseLayout({
+      layout: [
+        { type: 'hero', heading: 'Hi', subheading: 'Welcome' },
+        { type: 'features', heading: 'Why us', items: [{ title: 'Fast', text: 'Quick' }, { title: 'Cheap', text: 'Low cost' }] },
+        { type: 'cta', heading: 'Go', buttonLabel: 'Start' },
+      ],
+      theme: { primaryColor: '#16a34a', font: 'serif' },
+    })
     expect(r.ok).toBe(true)
+    if (r.ok) expect(r.layout).toHaveLength(3)
   })
 
-  it('rejects unknown fields (fail-closed, not coerced)', () => {
-    const r = parseIntent({ action: 'update_page_field', pageId: 1, field: 'title', value: 'x', evil: 1 })
-    expect(r).toEqual({ ok: false, error: 'unknown field: evil' })
+  it('rejects an unknown block type', () => {
+    expect(parseLayout({ layout: [{ type: 'carousel', heading: 'x' }] }).ok).toBe(false)
   })
 
-  it('rejects an out-of-scope action', () => {
-    const r = parseIntent({ action: 'delete_everything', pageId: 1, field: 'title', value: 'x' })
-    expect(r.ok).toBe(false)
+  it('rejects an unknown field on a block', () => {
+    expect(parseLayout({ layout: [{ type: 'hero', heading: 'x', script: 'evil' }] }).ok).toBe(false)
   })
 
-  it('rejects an out-of-scope field', () => {
-    const r = parseIntent({ action: 'update_page_field', pageId: 1, field: 'hero.image', value: 'x' })
-    expect(r.ok).toBe(false)
+  it('rejects items on a block type that has none', () => {
+    expect(parseLayout({ layout: [{ type: 'cta', items: [{ title: 'x' }] }] }).ok).toBe(false)
   })
 
-  it('rejects a non-integer pageId', () => {
-    expect(parseIntent({ action: 'update_page_field', pageId: '1', field: 'title', value: 'x' }).ok).toBe(false)
+  it('rejects an unknown item field', () => {
+    expect(parseLayout({ layout: [{ type: 'features', items: [{ title: 'x', url: 'evil' }] }] }).ok).toBe(false)
   })
 
-  it('rejects a non-string value', () => {
-    expect(parseIntent({ action: 'update_page_field', pageId: 1, field: 'title', value: 5 }).ok).toBe(false)
+  it('rejects non-string values', () => {
+    expect(parseLayout({ layout: [{ type: 'hero', heading: 5 }] }).ok).toBe(false)
   })
 
-  it('rejects non-objects', () => {
-    expect(parseIntent(null).ok).toBe(false)
-    expect(parseIntent('{}').ok).toBe(false)
-    expect(parseIntent([]).ok).toBe(false)
+  it('rejects an empty/non-array layout and unknown top-level keys', () => {
+    expect(parseLayout({ layout: [] }).ok).toBe(false)
+    expect(parseLayout({ layout: 'nope' }).ok).toBe(false)
+    expect(parseLayout({ layout: [{ type: 'hero' }], extra: 1 }).ok).toBe(false)
+  })
+
+  it('rejects a bad theme font', () => {
+    expect(parseLayout({ layout: [{ type: 'hero' }], theme: { font: 'comic' } }).ok).toBe(false)
+  })
+})
+
+describe('detectNewPageIntent', () => {
+  it('detects "add new page X" and extracts the name', () => {
+    expect(detectNewPageIntent('add new page Product')).toEqual({ title: 'Product' })
+    expect(detectNewPageIntent('add a new page Product')).toEqual({ title: 'Product' })
+    expect(detectNewPageIntent('make a new page Services')).toEqual({ title: 'Services' })
+  })
+
+  it('handles connectors, separators and quotes', () => {
+    expect(detectNewPageIntent('create a page called About')).toEqual({ title: 'About' })
+    expect(detectNewPageIntent('new page: Contact')).toEqual({ title: 'Contact' })
+    expect(detectNewPageIntent('add a page named "Our Team"')).toEqual({ title: 'Our Team' })
+  })
+
+  it('falls back to a default name when none is given', () => {
+    expect(detectNewPageIntent('add a new page')).toEqual({ title: 'New Page' })
+  })
+
+  it('does NOT fire on section edits to the current page', () => {
+    expect(detectNewPageIntent('add a products section')).toBeNull()
+    expect(detectNewPageIntent('add a hero to the page')).toBeNull()
+    expect(detectNewPageIntent('change the page title to Home')).toBeNull()
+    expect(detectNewPageIntent('delete the about page')).toBeNull()
   })
 })
 

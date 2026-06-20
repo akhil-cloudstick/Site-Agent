@@ -35,67 +35,130 @@
 -->
 <style>
   :root{
-    --bg:#0f1419; --panel:#171d26; --panel2:#1d2530; --line:#2a3340;
-    --ink:#e6edf3; --muted:#9aa7b4; --faint:#6b7785;
+    --bg:#0e1216; --panel:#161b22; --panel2:#1c2530; --line:#283139; --line2:#323d49;
+    --ink:#e9eef3; --muted:#97a3b0; --faint:#6b7785;
     --p1:#e3a008; --p2:#3b82f6; --p3:#6b7785;
     --done:#2ea043; --prog:#3b82f6; --blocked:#e5534b; --todo:#6b7785;
     --crit:#e5534b; --accent:#58a6ff; --focus:#ffd166;
-    --radius:12px; --shadow:0 1px 2px rgba(0,0,0,.25);
+    --radius:12px; --shadow:0 1px 3px rgba(0,0,0,.35);
+    --sidebar:300px;
   }
   *{box-sizing:border-box}
   html,body{margin:0;background:var(--bg);color:var(--ink);
     font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
-    font-size:15px;line-height:1.5}
+    font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
   a{color:var(--accent)}
-  .wrap{max-width:1180px;margin:0 auto;padding:0 24px 96px}
-  header.app{position:sticky;top:0;z-index:50;background:rgba(15,20,25,.96);
-    backdrop-filter:blur(4px);border-bottom:1px solid var(--line);padding:12px 0}
-  header.app .wrap{padding-bottom:0}
-  h1{font-size:19px;margin:0 0 2px}
-  .sub{color:var(--muted);font-size:12.5px;margin-bottom:10px}
+  button{font:inherit;font-size:12.5px;cursor:pointer;background:var(--panel2);color:var(--muted);
+    border:1px solid var(--line);border-radius:8px;padding:6px 13px;transition:.15s}
+  button:hover{border-color:var(--line2);background:#222c38;color:var(--ink)}
+  button.ghost{background:transparent;border-color:transparent;color:var(--muted)}
+  button.ghost:hover{background:var(--panel2);border-color:var(--line);color:var(--ink)}
+  select{font:inherit;color:var(--ink);background-color:var(--panel);border:1px solid var(--line);border-radius:8px;
+    appearance:none;-webkit-appearance:none;padding:6px 28px 6px 11px;cursor:pointer;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none' stroke='%2397a3b0' stroke-width='1.4'%3E%3Cpath d='M1 1l4 4 4-4'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 10px center;transition:.15s}
+  select:hover{border-color:var(--line2)}
+  :focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:6px}
+  .hide{display:none !important}
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+  /* theme-matched scrollbars */
+  *{scrollbar-width:thin;scrollbar-color:#33404b transparent}
+  ::-webkit-scrollbar{width:11px;height:11px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:#2f3a45;border-radius:8px;border:2px solid transparent;background-clip:padding-box}
+  ::-webkit-scrollbar-thumb:hover{background:#3d4a57;border:2px solid transparent;background-clip:padding-box}
+  ::-webkit-scrollbar-corner{background:transparent}
+
+  /* ---------- app shell ---------- */
+  .shell{display:flex;align-items:flex-start;min-height:100vh}
+  .sidebar{width:var(--sidebar);flex:none;position:sticky;top:0;height:100vh;overflow-y:auto;
+    background:var(--panel);border-right:1px solid var(--line);padding:22px 18px;display:flex;flex-direction:column;gap:20px}
+  .main{flex:1;min-width:0}
+
+  /* ---------- sidebar brand + overall ring ---------- */
+  .brand{display:flex;flex-direction:column;gap:3px}
+  .brand .bt{font-size:15px;font-weight:700;letter-spacing:.2px}
+  .brand .bs{font-size:11px;color:var(--faint)}
+  .brand .bs code{background:var(--panel2);padding:1px 5px;border-radius:4px;color:var(--muted);font-size:10.5px}
+  .overall{display:flex;align-items:center;gap:14px;padding:14px;background:var(--panel2);border:1px solid var(--line);border-radius:12px}
+  .ring{--p:0;position:relative;width:62px;height:62px;flex:none;border-radius:50%;display:grid;place-items:center;
+    background:conic-gradient(var(--done) calc(var(--p)*1%), var(--line) 0)}
+  .ring::before{content:"";position:absolute;inset:6px;border-radius:50%;background:var(--panel2)}
+  .ring b{position:relative;font-size:15px;font-weight:700}
+  .overall .ov-meta{display:flex;flex-direction:column;gap:2px;min-width:0}
+  .overall .ov-meta .ovt{font-size:12px;color:var(--muted)}
+  .overall .ov-meta .ovn{font-size:13.5px;font-weight:650}
+
+  /* ---------- sidebar stepper nav ---------- */
+  .nav-label{font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--faint);font-weight:700;padding:0 6px}
+  .stepper{position:relative;display:flex;flex-direction:column}
+  .stepper::before{content:"";position:absolute;left:24px;top:22px;bottom:22px;width:2px;background:var(--line);z-index:0}
+  .step{position:relative;z-index:1;display:grid;grid-template-columns:28px 1fr;gap:11px;align-items:start;
+    text-align:left;background:transparent;border:1px solid transparent;border-radius:9px;padding:7px 9px;cursor:pointer;width:100%}
+  .step:hover{background:rgba(255,255,255,.035)}
+  .step.active{background:rgba(88,166,255,.10);border-color:rgba(88,166,255,.30)}
+  .step .dot{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;
+    font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;
+    background:var(--panel);border:1.5px solid var(--line2);color:var(--muted);transition:.15s}
+  .step.done .dot{background:var(--done);border-color:var(--done);color:#06210f}
+  .step.partial .dot{border-color:var(--prog);color:#9ec5ff;box-shadow:inset 0 0 0 3px rgba(59,130,246,.15)}
+  .step .sb{min-width:0;display:flex;flex-direction:column;gap:5px;padding-top:1px}
+  .step .snm{font-size:13px;font-weight:600;color:#d5dde5;line-height:1.3}
+  .step.active .snm{color:#fff}
+  .step .srow{display:flex;align-items:center;gap:8px}
+  .step .scount{font-size:11px;color:var(--faint);font-variant-numeric:tabular-nums;min-width:30px}
+  .step .smini{flex:1;height:4px;border-radius:3px;background:var(--line);overflow:hidden}
+  .step .smini i{display:block;height:100%;width:0;background:linear-gradient(90deg,#2ea043,#3fb950);border-radius:3px;transition:width .25s}
+
+  /* ---------- main topbar ---------- */
+  .topbar{position:sticky;top:0;z-index:40;background:rgba(14,18,22,.92);backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--line);padding:16px 28px}
+  .tb-top,.toolbar{max-width:1080px;margin-left:auto;margin-right:auto}
+  .tb-top{display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap}
+  h1{font-size:18px;margin:0 0 3px;font-weight:700}
+  .sub{color:var(--muted);font-size:12px;margin:0}
   .sub code{background:var(--panel2);padding:1px 5px;border-radius:4px;color:var(--ink)}
-  .bars{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
-  .pbar{flex:1;min-width:220px}
-  .pbar .lbl{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:3px}
+  .tb-actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px}
+  .toolbar .grp{display:flex;gap:8px;align-items:center;background:var(--panel);border:1px solid var(--line);
+    border-radius:9px;padding:6px 10px}
+  .toolbar label{font-size:12.5px;color:var(--muted);display:flex;gap:6px;align-items:center;cursor:pointer}
+  .toolbar label:hover{color:var(--ink)}
+  .right{margin-left:auto}
+
+  .content{padding:22px 28px 96px;max-width:1080px;margin:0 auto}
   .track{height:10px;background:var(--panel2);border-radius:6px;overflow:hidden;border:1px solid var(--line)}
   .fill{height:100%;background:linear-gradient(90deg,#2ea043,#3fb950);width:0%;transition:width .25s}
-  .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}
-  .toolbar .grp{display:flex;gap:6px;align-items:center;background:var(--panel);border:1px solid var(--line);
-    border-radius:8px;padding:4px 8px}
-  .toolbar label{font-size:12.5px;color:var(--muted);display:flex;gap:5px;align-items:center;cursor:pointer}
-  button{font:inherit;cursor:pointer;background:var(--panel2);color:var(--ink);
-    border:1px solid var(--line);border-radius:7px;padding:5px 11px}
-  button:hover{border-color:var(--accent)}
-  button.ghost{background:transparent}
-  :focus-visible{outline:3px solid var(--focus);outline-offset:1px;border-radius:4px}
-  .banner{margin:10px 0;padding:10px 12px;border-radius:8px;border:1px solid;font-size:13.5px;
+
+  .banner{margin:10px 0;padding:11px 13px;border-radius:9px;border:1px solid;font-size:13.5px;
     display:flex;gap:12px;align-items:center;flex-wrap:wrap}
   .banner.warn{background:#3a2a12;border-color:#7a5b1e;color:#ffd79a}
   .banner.err{background:#3a1717;border-color:#7a2c2c;color:#ffb3b3}
   .banner.ok{background:#16301c;border-color:#2f6b3d;color:#bff0c8}
   .banner .sp{flex:1;min-width:200px}
-  .hide{display:none !important}
-  .mod{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);margin:18px 0;overflow:hidden;box-shadow:var(--shadow)}
+
+  /* ---------- module sections ---------- */
+  .mod{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);margin:0 0 18px;overflow:hidden;box-shadow:var(--shadow);scroll-margin-top:96px}
   .modhead{display:flex;gap:14px;align-items:center;padding:16px 18px;cursor:pointer;list-style:none}
   .modhead:hover{background:rgba(255,255,255,.015)}
   .modhead::-webkit-details-marker{display:none}
-  .modhead .mi{font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--faint);min-width:38px;font-variant-numeric:tabular-nums}
+  .modhead .mi{font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--accent);min-width:38px;font-variant-numeric:tabular-nums}
   .modhead .mt{font-weight:700;font-size:16px;flex:1}
-  .modhead .mc{color:var(--muted);font-size:12px;min-width:64px;text-align:right;font-variant-numeric:tabular-nums}
+  .modhead .mc{color:var(--muted);font-size:12px;min-width:54px;text-align:right;font-variant-numeric:tabular-nums}
   .modhead .mtrack{width:120px}
   details[open] > .modhead{border-bottom:1px solid var(--line)}
-  .submod{padding:2px 0 6px}
   .subhead{display:flex;gap:10px;align-items:center;padding:12px 18px 12px 34px;cursor:pointer;list-style:none}
   .subhead:hover .st{color:#fff}
   .subhead::-webkit-details-marker{display:none}
   .subhead .st{flex:1;font-weight:650;font-size:13.5px;color:#cdd6df}
-  details.sm > .subhead .st{font-size:12.5px;letter-spacing:.4px;text-transform:uppercase;color:#aeb9c4}
+  details.sm > .subhead .st{font-size:12px;letter-spacing:.5px;text-transform:uppercase;color:#9aa7b4}
   .subhead .sc{color:var(--faint);font-size:11.5px;font-variant-numeric:tabular-nums}
   .marker{transition:transform .15s;color:var(--faint);font-size:11px}
   details[open] > summary .marker{transform:rotate(90deg)}
-  ul.tasks{list-style:none;margin:0;padding:4px 18px 14px 34px;display:flex;flex-direction:column;gap:10px}
-  li.task{display:flex;gap:13px;padding:14px 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel2);align-items:flex-start;transition:border-color .15s}
-  li.task:hover{border-color:#3a4654}
+  ul.tasks{list-style:none;margin:0;padding:4px 18px 16px 34px;display:flex;flex-direction:column;gap:10px}
+  li.task{display:flex;gap:13px;padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--panel2);align-items:flex-start;transition:border-color .15s;scroll-margin-top:104px}
+  li.task:hover{border-color:var(--line2)}
   .tk-check{margin-top:1px}
   .tk-check input{width:18px;height:18px;cursor:pointer;accent-color:var(--done)}
   .tk-main{flex:1;min-width:0}
@@ -111,8 +174,7 @@
   .ref{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:var(--faint);
     background:rgba(255,255,255,.03);padding:1px 6px;border-radius:4px}
   .tk-status{margin-left:auto}
-  .tk-status select{font:inherit;font-size:12px;background:var(--panel);color:var(--ink);
-    border:1px solid var(--line);border-radius:7px;padding:5px 9px;font-weight:600}
+  .tk-status select{font-size:12px;font-weight:600;padding-top:6px;padding-bottom:6px}
   .tk-status select.s-done{border-color:var(--done);color:#9be3ad}
   .tk-status select.s-in_progress{border-color:var(--prog);color:#9ec5ff}
   .tk-status select.s-blocked{border-color:var(--blocked);color:#ffb3b3}
@@ -124,13 +186,19 @@
   .savestate.saving{color:#ffce5c}
   .savestate.saved{color:var(--done)}
   .savestate.error{color:var(--blocked)}
-  .right{margin-left:auto}
-  .legend{font-size:12px;color:var(--muted);margin:10px 0 0;line-height:1.9}
+  .legend{font-size:12px;color:var(--muted);margin:0;line-height:1.9}
+  details.legendbox{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin:0 0 18px;padding:0}
+  details.legendbox > summary{list-style:none;cursor:pointer;padding:12px 16px;font-size:12.5px;font-weight:600;color:#cdd6df;display:flex;gap:8px;align-items:center}
+  details.legendbox > summary::-webkit-details-marker{display:none}
+  details.legendbox[open] > summary{border-bottom:1px solid var(--line)}
+  details.legendbox .lgbody{padding:12px 16px}
+  .cov{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-top:18px;overflow:hidden}
+  .waves{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-top:14px;overflow:hidden}
   .cov table{border-collapse:collapse;width:100%;font-size:12.5px}
   .cov th,.cov td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top}
   .cov th{background:var(--panel2);color:var(--muted)}
   .cov caption{text-align:left;color:var(--muted);font-size:12px;padding:6px 0}
-  footer{color:var(--faint);font-size:12px;margin-top:24px;border-top:1px solid var(--line);padding-top:12px}
+  footer{color:var(--faint);font-size:12px;margin-top:24px;border-top:1px solid var(--line);padding-top:14px}
   .tk-deps{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-top:10px;font-size:11px}
   .tk-deps .dlbl{color:var(--faint);font-size:11px}
   .depchip{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:10.5px;
@@ -142,16 +210,29 @@
   .ready.go{color:#9be3ad;border-color:#2f5d3a;background:#11261a}
   .ready.wait{color:#ffc9a0;border-color:#6e4a2a;background:#2a1c0f}
   .ready.isdone{color:var(--faint);border-color:var(--line);background:transparent}
-  @keyframes flashrow{0%{background:#2b3a1c}100%{background:transparent}}
+  @keyframes flashrow{0%{background:#2b3a1c}100%{background:var(--panel2)}}
   li.task.flash{animation:flashrow 1.6s ease-out}
-  .waves .wave{border:1px solid var(--line);border-radius:8px;margin:8px 0;background:var(--panel2)}
+  .waves .wave{border:1px solid var(--line);border-radius:8px;margin:8px 11px;background:var(--panel2)}
   .waves .wh{padding:7px 11px;font-weight:600;font-size:13px;border-bottom:1px solid var(--line);color:#cdd6df}
   .waves ul{list-style:none;margin:0;padding:6px 11px}
   .waves li{padding:3px 0;font-size:12.5px;display:flex;gap:8px;align-items:baseline}
   .waves .wid{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:var(--faint);cursor:pointer;min-width:170px}
   .waves .wid:hover{color:var(--accent)}
-  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
   details.mod > summary, details.sm > summary{user-select:none}
+
+  /* ---------- mobile: sidebar collapses to top ---------- */
+  .menu-toggle{display:none}
+  @media (max-width:920px){
+    .shell{flex-direction:column}
+    .sidebar{width:100%;height:auto;position:static;border-right:none;border-bottom:1px solid var(--line)}
+    .stepper{flex-flow:row wrap;gap:6px}
+    .stepper::before{display:none}
+    .step{width:auto;grid-template-columns:auto;gap:7px}
+    .step .sb{display:none}
+    .step .dot{width:30px;height:30px}
+    .step.collapsed-nav{display:none}
+    .topbar,.content{padding-left:18px;padding-right:18px}
+  }
   @media (max-width:680px){
     .modhead .mtrack{display:none}
     li.task{flex-wrap:wrap}
@@ -159,79 +240,100 @@
 </style>
 </head>
 <body>
-<header class="app">
-  <div class="wrap">
-    <h1>SiteAgent&nbsp;v1 — Project Plan Tracker</h1>
-    <div class="sub">
-      Modules&nbsp;›&nbsp;Submodules&nbsp;›&nbsp;Tasks, by architecture component ·
-      content&nbsp;<code id="ver"></code> · generated&nbsp;<code id="gen"></code> ·
-      sources: <code>Architecture.md</code> + <code>ADR&nbsp;0001</code> (override <code>AgentPlan.md</code>), <code>UserFlow.md</code>, <code>DB-Architecture.md</code>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="bt">SiteAgent&nbsp;v1</span>
+      <span class="bs">Project Plan · content&nbsp;<code id="ver"></code> · <code id="gen"></code></span>
     </div>
-    <div class="bars">
-      <div class="pbar">
-        <div class="lbl"><span>Overall progress</span><span id="ovText">0 / 0</span></div>
-        <div class="track"><div class="fill" id="ovFill"></div></div>
-        <div id="ovBar" role="progressbar" aria-label="Overall progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" class="sr-only"></div>
-      </div>
-    </div>
-    <div class="toolbar">
-      <div class="grp" role="group" aria-label="Filters">
-        <label><input type="checkbox" id="fP1"> P1 only</label>
-        <label><input type="checkbox" id="fCrit"> Security-critical only</label>
-        <label><input type="checkbox" id="fHideDone"> Hide done</label>
-        <label><input type="checkbox" id="fReady"> Ready now</label>
-        <label><input type="checkbox" id="fBlocked"> Waiting on deps</label>
-        <span id="filtCount" class="ref" aria-live="polite"></span>
-      </div>
-      <div class="grp">
-        <button id="expandAll" class="ghost" type="button">Expand all</button>
-        <button id="collapseAll" class="ghost" type="button">Collapse all</button>
-      </div>
-      <div class="grp right">
-        <button id="btnExport" type="button">Export</button>
-        <button id="btnImport" type="button">Import</button>
-        <button id="btnReset" class="ghost" type="button">Reset</button>
-        <input type="file" id="fileImport" accept="application/json,.json" class="hide">
-      </div>
-    </div>
-    <div class="legend">
-      <strong>Priority = build sequencing.</strong>
-      <span class="chip p1">P1</span>&nbsp;first end-to-end vertical slice ·
-      <span class="chip p2">P2</span>&nbsp;hardening / multi-tenant / structural ·
-      <span class="chip p3">P3</span>&nbsp;polish / observability / later.
-      <span class="chip crit">⚠ security-critical</span>&nbsp;= isolation/correctness risk (independent of priority) ·
-      <span class="chip inf">inferred</span>&nbsp;= derived by engineering judgment (hover for rationale).
-      <br><strong>Dependencies</strong> (from <code>Diagrams.md</code> + <code>UserFlow.md</code>):
-      <span class="ready go">▶ ready</span>&nbsp;all prerequisites done ·
-      <span class="ready wait">⏳ waiting on N</span>&nbsp;prerequisites still open ·
-      <span class="depchip met">dep ✓</span>/<span class="depchip unmet">dep ✗</span>&nbsp;click a dep to jump to it.
-    </div>
-  </div>
-</header>
 
-<div class="wrap">
-  <div id="banners"></div>
-  <div id="tree" aria-label="Project task tree"></div>
-
-  <details class="cov" style="margin-top:18px">
-    <summary class="subhead" style="padding-left:14px"><span class="marker">▶</span><span class="st">Coverage matrix — every Architecture contract &amp; UserFlow flow maps to a task or is explicitly out of scope</span></summary>
-    <div id="covWrap" style="padding:10px 14px"></div>
-  </details>
-
-  <details class="waves" style="margin-top:14px">
-    <summary class="subhead" style="padding-left:14px"><span class="marker">▶</span><span class="st">Build waves — dependency-ordered (Wave 0 = no prerequisites; each later wave needs the earlier ones)</span></summary>
-    <div id="wavesWrap" style="padding:6px 14px 12px">
-      <p class="legend" style="margin:6px 0 2px">Topological order from the <code>DEPS</code> graph. A task in Wave <em>k</em> has its longest prerequisite chain <em>k</em> deep — it can't truly start until everything in earlier waves it depends on is done. Within a wave, ordered by priority. Click an id to jump to the task.</p>
-      <div id="wavesBody"></div>
+    <div class="overall">
+      <div class="ring" id="ovRing"><b id="ovText">0%</b></div>
+      <div class="ov-meta">
+        <span class="ovt">Overall progress</span>
+        <span class="ovn" id="ovCount">0 / 0</span>
+      </div>
+      <div id="ovBar" role="progressbar" aria-label="Overall progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" class="sr-only"></div>
+      <div id="ovFill" class="hide"></div>
     </div>
-  </details>
 
-  <footer>
-    <div id="liveRegion" role="status" aria-live="polite" class="sr-only"></div>
-    Self-contained &amp; offline — no external requests. Progress = <em>done leaf-tasks ÷ all non-deferred leaf-tasks</em>;
-    <em>in-progress</em> and <em>blocked</em> count as not done. State is per-browser (localStorage); use <strong>Export</strong> to back it up.
-    This is a planning artifact only — it generates no product code.
-  </footer>
+    <div>
+      <div class="nav-label">Modules</div>
+      <nav class="stepper" id="stepper" aria-label="Module navigation"></nav>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div class="tb-top">
+        <div>
+          <h1>SiteAgent&nbsp;v1 — Project Plan Tracker</h1>
+          <p class="sub">Modules&nbsp;›&nbsp;Submodules&nbsp;›&nbsp;Tasks · sources: <code>Architecture.md</code> + <code>ADR&nbsp;0001</code> (override <code>AgentPlan.md</code>), <code>UserFlow.md</code>, <code>DB-Architecture.md</code></p>
+        </div>
+        <div class="tb-actions">
+          <button id="expandAll" class="ghost" type="button">Expand all</button>
+          <button id="collapseAll" class="ghost" type="button">Collapse all</button>
+          <button id="btnExport" type="button">Export</button>
+          <button id="btnImport" type="button">Import</button>
+          <button id="btnReset" class="ghost" type="button">Reset</button>
+          <input type="file" id="fileImport" accept="application/json,.json" class="hide">
+        </div>
+      </div>
+      <div class="toolbar">
+        <div class="grp" role="group" aria-label="Filters">
+          <label><input type="checkbox" id="fP1"> P1 only</label>
+          <label><input type="checkbox" id="fCrit"> Security-critical only</label>
+          <label><input type="checkbox" id="fHideDone"> Hide done</label>
+          <label><input type="checkbox" id="fReady"> Ready now</label>
+          <label><input type="checkbox" id="fBlocked"> Waiting on deps</label>
+          <span id="filtCount" class="ref" aria-live="polite"></span>
+        </div>
+      </div>
+    </header>
+
+    <div class="content">
+      <details class="legendbox">
+        <summary><span class="marker">▶</span> Legend &amp; key — priorities, security-critical, dependencies</summary>
+        <div class="lgbody">
+          <div class="legend">
+            <strong>Priority = build sequencing.</strong>
+            <span class="chip p1">P1</span>&nbsp;first end-to-end vertical slice ·
+            <span class="chip p2">P2</span>&nbsp;hardening / multi-tenant / structural ·
+            <span class="chip p3">P3</span>&nbsp;polish / observability / later.
+            <span class="chip crit">⚠ security-critical</span>&nbsp;= isolation/correctness risk (independent of priority) ·
+            <span class="chip inf">inferred</span>&nbsp;= derived by engineering judgment (hover for rationale).
+            <br><strong>Dependencies</strong> (from <code>Diagrams.md</code> + <code>UserFlow.md</code>):
+            <span class="ready go">▶ ready</span>&nbsp;all prerequisites done ·
+            <span class="ready wait">⏳ waiting on N</span>&nbsp;prerequisites still open ·
+            <span class="depchip met">dep ✓</span>/<span class="depchip unmet">dep ✗</span>&nbsp;click a dep to jump to it.
+          </div>
+        </div>
+      </details>
+
+      <div id="banners"></div>
+      <div id="tree" aria-label="Project task tree"></div>
+
+      <details class="cov" style="margin-top:18px">
+        <summary class="subhead" style="padding-left:16px"><span class="marker">▶</span><span class="st">Coverage matrix — every Architecture contract &amp; UserFlow flow maps to a task or is explicitly out of scope</span></summary>
+        <div id="covWrap" style="padding:10px 16px"></div>
+      </details>
+
+      <details class="waves" style="margin-top:14px">
+        <summary class="subhead" style="padding-left:16px"><span class="marker">▶</span><span class="st">Build waves — dependency-ordered (Wave 0 = no prerequisites; each later wave needs the earlier ones)</span></summary>
+        <div id="wavesWrap" style="padding:6px 16px 12px">
+          <p class="legend" style="margin:6px 0 8px">Topological order from the <code>DEPS</code> graph. A task in Wave <em>k</em> has its longest prerequisite chain <em>k</em> deep — it can't truly start until everything in earlier waves it depends on is done. Within a wave, ordered by priority. Click an id to jump to the task.</p>
+          <div id="wavesBody"></div>
+        </div>
+      </details>
+
+      <footer>
+        <div id="liveRegion" role="status" aria-live="polite" class="sr-only"></div>
+        Self-contained &amp; offline — no external requests. Progress = <em>done leaf-tasks ÷ all non-deferred leaf-tasks</em>;
+        <em>in-progress</em> and <em>blocked</em> count as not done. State is per-browser (localStorage); use <strong>Export</strong> to back it up.
+        This is a planning artifact only — it generates no product code.
+      </footer>
+    </div>
+  </main>
 </div>
 
 <script>
@@ -685,9 +787,12 @@ function updateProgress(){
   // Overall (full denominator — never affected by filters)
   const all = allTasks();
   const ov = counts(all);
-  $("ovFill").style.width = pct(ov)+"%";
-  $("ovText").textContent = ov.done+" / "+ov.total+" ("+pct(ov)+"%)";
-  const ob = $("ovBar"); ob.setAttribute("aria-valuenow", String(pct(ov)));
+  const ovp = pct(ov);
+  const ofill=$("ovFill"); if(ofill) ofill.style.width = ovp+"%";
+  $("ovText").textContent = ovp+"%";
+  const ocount=$("ovCount"); if(ocount) ocount.textContent = ov.done+" / "+ov.total;
+  const oring=$("ovRing"); if(oring) oring.style.setProperty("--p", ovp);
+  const ob = $("ovBar"); ob.setAttribute("aria-valuenow", String(ovp));
   ob.setAttribute("aria-valuetext", ov.done+" of "+ov.total+" tasks done");
   // Per module + submodule
   CONTENT.modules.forEach(m=>{
@@ -699,6 +804,16 @@ function updateProgress(){
     if(txt) txt.textContent=mc.done+"/"+mc.total;
     const bar=document.querySelector('[data-mbar="'+m.id+'"]');
     if(bar) bar.setAttribute("aria-valuenow",String(pct(mc)));
+    // sidebar stepper step
+    const step=document.querySelector('.step[data-step="'+m.id+'"]');
+    if(step){
+      const sc=step.querySelector('.scount'); if(sc) sc.textContent=mc.done+"/"+mc.total;
+      const mi=step.querySelector('.smini i'); if(mi) mi.style.width=pct(mc)+"%";
+      step.classList.toggle('done', mc.total>0 && mc.done===mc.total);
+      step.classList.toggle('partial', mc.done>0 && mc.done<mc.total);
+      const dot=step.querySelector('.dot');
+      if(dot) dot.textContent = (mc.total>0 && mc.done===mc.total) ? "✓" : String(CONTENT.modules.indexOf(m)+1);
+    }
   });
   document.querySelectorAll('[data-scount]').forEach(el=>{
     const ids=el.getAttribute('data-scount').split(',');
@@ -787,6 +902,65 @@ function render(){
   applyFilters();
   // size every note box to fit its content (needs to be in the DOM to measure)
   requestAnimationFrame(()=>document.querySelectorAll('.tk-notes textarea').forEach(autoGrow));
+  setupScrollSpy();
+}
+
+/* ============================ SIDEBAR STEPPER NAV ============================ */
+// Build the left-rail vertical stepper once. Per-module state (done/partial,
+// counts, mini-bar) is refreshed by updateProgress(); active highlight by scroll-spy.
+function buildStepper(){
+  const nav=$("stepper"); if(!nav) return; nav.textContent="";
+  CONTENT.modules.forEach((m,i)=>{
+    const btn=document.createElement("button"); btn.type="button"; btn.className="step"; btn.dataset.step=m.id;
+    btn.setAttribute("aria-label","Go to "+m.id.toUpperCase()+": "+m.title);
+
+    const dot=document.createElement("span"); dot.className="dot"; dot.textContent=String(i+1);
+
+    const sb=document.createElement("span"); sb.className="sb";
+    const nm=document.createElement("span"); nm.className="snm"; nm.textContent=m.title;
+    const row=document.createElement("span"); row.className="srow";
+    const sc=document.createElement("span"); sc.className="scount"; sc.textContent="0/0";
+    const mini=document.createElement("span"); mini.className="smini";
+    const ifill=document.createElement("i"); mini.appendChild(ifill);
+    row.append(sc,mini); sb.append(nm,row);
+
+    btn.append(dot,sb);
+    btn.addEventListener("click",()=>scrollToModule(m.id));
+    nav.appendChild(btn);
+  });
+}
+
+function setActiveStep(id){
+  document.querySelectorAll('.step').forEach(s=>s.classList.toggle('active', s.dataset.step===id));
+}
+
+function scrollToModule(id){
+  const det=document.querySelector('details.mod[data-mod="'+id+'"]');
+  if(!det) return;
+  det.open=true;
+  det.scrollIntoView({behavior:"smooth", block:"start"});
+  setActiveStep(id);
+}
+
+// Scroll-spy: highlight the module whose section is nearest the top of the viewport.
+let _spy=null;
+function setupScrollSpy(){
+  if(_spy){ _spy.disconnect(); _spy=null; }
+  if(!("IntersectionObserver" in window)) return;
+  const visible=new Map();
+  _spy=new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{
+      const id=e.target.dataset.mod;
+      if(e.isIntersecting) visible.set(id, e.intersectionRatio); else visible.delete(id);
+    });
+    if(visible.size){
+      // pick the module section in document order that is currently visible
+      let best=null;
+      CONTENT.modules.forEach(m=>{ if(best===null && visible.has(m.id)) best=m.id; });
+      if(best) setActiveStep(best);
+    }
+  }, { rootMargin:"-96px 0px -55% 0px", threshold:[0,.01,.25,.5] });
+  document.querySelectorAll('details.mod').forEach(d=>_spy.observe(d));
 }
 
 function renderTask(t){
@@ -1029,6 +1203,7 @@ function boot(){
   }
 
   loadState();
+  buildStepper();
   render();
   renderCoverage();
   renderWaves();
