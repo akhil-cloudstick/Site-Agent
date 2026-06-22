@@ -15,6 +15,10 @@ import * as migration_20260620_111740_products_block from './20260620_111740_pro
 import * as migration_20260620_114403_product_description from './20260620_114403_product_description';
 import * as migration_20260620_120000_pages_not_null from './20260620_120000_pages_not_null';
 import * as migration_20260620_130004_tenant_live_url from './20260620_130004_tenant_live_url';
+import * as migration_20260622_092510_connected_sites from './20260622_092510_connected_sites';
+import * as migration_20260622_094940_connected_source_html from './20260622_094940_connected_source_html';
+import * as migration_20260622_114414_connected_whole_site from './20260622_114414_connected_whole_site';
+import * as migration_20260622_153507_connected_undo_stack from './20260622_153507_connected_undo_stack';
 
 export const migrations = [
   {
@@ -100,6 +104,26 @@ export const migrations = [
   {
     up: migration_20260620_130004_tenant_live_url.up,
     down: migration_20260620_130004_tenant_live_url.down,
-    name: '20260620_130004_tenant_live_url'
+    name: '20260620_130004_tenant_live_url',
+  },
+  {
+    up: migration_20260622_092510_connected_sites.up,
+    down: migration_20260622_092510_connected_sites.down,
+    name: '20260622_092510_connected_sites',
+  },
+  {
+    up: migration_20260622_094940_connected_source_html.up,
+    down: migration_20260622_094940_connected_source_html.down,
+    name: '20260622_094940_connected_source_html',
+  },
+  {
+    up: migration_20260622_114414_connected_whole_site.up,
+    down: migration_20260622_114414_connected_whole_site.down,
+    name: '20260622_114414_connected_whole_site',
+  },
+  {
+    up: migration_20260622_153507_connected_undo_stack.up,
+    down: migration_20260622_153507_connected_undo_stack.down,
+    name: '20260622_153507_connected_undo_stack'
   },
 ];

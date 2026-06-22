@@ -1,0 +1,8 @@
+{
+  "hero.heading": { "type": "text", "value": "Welcome to Ayurveda Wellness" },
+  "hero.subheading": { "type": "text", "value": "Natural healing, the traditional way." },
+  "hero.image": { "type": "image", "value": "/images/hero.jpg" },
+  "about.title": { "type": "text", "value": "About Us" },
+  "about.body": { "type": "text", "value": "We have practiced authentic Ayurveda for over 20 years." },
+  "cta.button": { "type": "text", "value": "Book a Consultation" }
+}

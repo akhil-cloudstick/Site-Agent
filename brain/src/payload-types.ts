@@ -72,6 +72,7 @@ export interface Config {
     tenants: Tenant;
     changesets: Changeset;
     pages: Page;
+    connectedSites: ConnectedSite;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -84,6 +85,7 @@ export interface Config {
     tenants: TenantsSelect<false> | TenantsSelect<true>;
     changesets: ChangesetsSelect<false> | ChangesetsSelect<true>;
     pages: PagesSelect<false> | PagesSelect<true>;
+    connectedSites: ConnectedSitesSelect<false> | ConnectedSitesSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -376,6 +378,79 @@ export interface RichTextBlock {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "connectedSites".
+ */
+export interface ConnectedSite {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  originUrl: string;
+  repo?: string | null;
+  cloudflareProject?: string | null;
+  contentPath?: string | null;
+  status?: ('connected' | 'error') | null;
+  sourceHtml?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  sourcePath?: string | null;
+  pagePaths?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  lastError?: string | null;
+  liveUrl?: string | null;
+  draftContent?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  publishedContent?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  previousContent?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  undoStack?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
 export interface PayloadKv {
@@ -417,6 +492,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'pages';
         value: number | Page;
+      } | null)
+    | ({
+        relationTo: 'connectedSites';
+        value: number | ConnectedSite;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -676,6 +755,30 @@ export interface RichTextBlockSelect<T extends boolean = true> {
   image?: T;
   id?: T;
   blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "connectedSites_select".
+ */
+export interface ConnectedSitesSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  originUrl?: T;
+  repo?: T;
+  cloudflareProject?: T;
+  contentPath?: T;
+  status?: T;
+  sourceHtml?: T;
+  sourcePath?: T;
+  pagePaths?: T;
+  lastError?: T;
+  liveUrl?: T;
+  draftContent?: T;
+  publishedContent?: T;
+  previousContent?: T;
+  undoStack?: T;
+  updatedAt?: T;
+  createdAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

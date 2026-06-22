@@ -42,6 +42,10 @@ next-env.d.ts
 
 /media
 
+# Connected-sites managed storage (cloned repos + built sites + publish temp)
+/.connected-sites
+/.connected-publish
+
 # Playwright
 node_modules/
 /test-results/

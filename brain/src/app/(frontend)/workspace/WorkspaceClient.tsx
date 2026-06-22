@@ -426,7 +426,7 @@ export function WorkspaceClient({ userEmail, workspace: initial, initialLiveUrl 
   }
 
   return (
-    <div style={{ display: 'flex', height: '100vh', fontFamily: 'system-ui, sans-serif', color: '#111' }}>
+    <div style={{ display: 'flex', height: '100%', fontFamily: 'system-ui, sans-serif', color: '#111' }}>
       {/* Chat */}
       <div style={{ width: chatWidth, flex: 'none', display: 'flex', flexDirection: 'column', background: '#fafafa' }}>
         <header style={{ padding: '10px 16px', borderBottom: '1px solid #e2e2e2', fontSize: 13, color: '#555', display: 'flex', alignItems: 'center', gap: 8, rowGap: 8, justifyContent: 'space-between', flexWrap: 'wrap' }}>
@@ -1034,7 +1034,7 @@ function KebabMenu({ options, onOpen }: { options: MenuOption[]; onOpen?: () => 
 }
 
 /** Minimal iOS-style on/off switch. */
-function Switch({ on, onChange, label }: { on: boolean; onChange: () => void; label: string }) {
+export function Switch({ on, onChange, label }: { on: boolean; onChange: () => void; label: string }) {
   return (
     <button onClick={onChange} title={label} style={{ display: 'flex', alignItems: 'center', gap: 8, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}>
       <span style={{ fontSize: 12, color: '#475467', fontWeight: 500 }}>{label}</span>

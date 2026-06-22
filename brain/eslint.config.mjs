@@ -59,7 +59,7 @@ const eslintConfig = [
     rules: { 'no-restricted-imports': 'off' },
   },
   {
-    ignores: ['.next/', 'src/payload-types.ts', 'src/payload-generated-schema.ts'],
+    ignores: ['.next/', 'src/payload-types.ts', 'src/payload-generated-schema.ts', '.connected-sites/', '.connected-publish/', 'media/'],
   },
 ]
 

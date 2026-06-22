@@ -340,8 +340,8 @@
 "use strict";
 /* ============================ CONTENT (immutable source of truth) ============================ */
 const CONTENT = {
-  contentVersion: 4,
-  generatedFrom: "2026-06-19",
+  contentVersion: 5,
+  generatedFrom: "2026-06-22",
   modules: [
     { id:"m1", title:"Foundation & Infra", subs:[
       { title:"Brain app skeleton", tasks:[
@@ -520,6 +520,24 @@ const CONTENT = {
         { id:"m13-responsive", t:"Narrow/mobile: collapse the split to switchable Chat · Preview · Changes tabs", p:"P3", ref:"UserFlow §Accessibility & responsive" },
         { id:"m13-keyboard-a11y", t:"Keyboard-selectable editable elements, labeled controls + live-region state announcements, non-pointer path to 'Edit this directly'", p:"P3", ref:"UserFlow §Accessibility & responsive" }
       ]}
+    ]},
+    { id:"m14", title:"Connected Sites — edit an external static site", subs:[
+      { title:"Connect & ingest", tasks:[
+        { id:"m14-collection", t:"ConnectedSites collection (tenant-scoped): site metadata + sourceHtml + draft/published/previous content snapshots", p:"P1", ref:"plan: Connect a website" },
+        { id:"m14-connect", t:"Connect by URL: fetch the built page HTML (SSRF-guarded) + extract editable text/images (data-sa markers + auto-detect) into Payload", p:"P1", ref:"plan: Connect a website" }
+      ]},
+      { title:"Edit content", tasks:[
+        { id:"m14-html-engine", t:"HTML content engine: find editable text/images and apply edits back onto the built HTML — design untouched", p:"P1", ref:"docs/rules.md" },
+        { id:"m14-edit", t:"Edit content as drafts: click-to-edit on a same-origin preview + image upload + AI chat-edit (strict, fail-closed)", p:"P1", ref:"plan: Connect a website" }
+      ]},
+      { title:"Publish", tasks:[
+        { id:"m14-publish", t:"Publish: render draft onto the HTML, deploy to the site's own Cloudflare project (same URL), rotate snapshots for one-click rollback", p:"P1", ref:"plan: Connect a website" },
+        { id:"m14-rules", t:"docs/rules.md — the build standard a client follows so a site is editable (stack, static, data-sa markers, images, handover)", p:"P1", ref:"docs/rules.md" }
+      ]},
+      { title:"Later phases", tasks:[
+        { id:"m14-multipage", t:"Multi-page crawl/ingest + per-page editing (v1 is single-page)", p:"P2", ref:"plan: Connect a website" },
+        { id:"m14-structural", t:"Structural edits (add/remove sections & pages, design changes via code) — later phase", p:"P3", ref:"plan: Connect a website" }
+      ]}
     ]}
   ]
 };
@@ -532,6 +550,7 @@ const CONTENT = {
      publish/discard -> review -> run -> live/fail).
    Direct prerequisites only (no transitive closure). Validated acyclic + all-ids-present at boot. */
 const DEPS = {
+  "m14-collection":["m2-payload-collections"], "m14-connect":["m14-collection"], "m14-html-engine":["m14-collection"], "m14-edit":["m14-html-engine","m14-connect"], "m14-publish":["m14-edit"], "m14-rules":[], "m14-multipage":["m14-connect"], "m14-structural":["m14-publish"],
   "m1-scaffold":[], "m1-config-seam":["m1-scaffold"], "m1-ci":["m1-scaffold"], "m1-host-warm":["m1-scaffold"], "m1-host-doc":["m1-host-warm"],
   "m2-tenants":["m1-scaffold"], "m2-changesets":["m2-tenants"], "m2-changeset-guard":["m2-changesets"], "m2-media-refs":["m2-changesets"], "m2-audit":["m1-scaffold"], "m2-payload-collections":["m1-scaffold"],
   "m2-edit-leases":["m2-tenants"], "m2-saga-checkpoints":["m2-changesets"], "m2-fk-constraints":["m2-payload-collections","m2-tenants"], "m2-indexes":["m2-changesets","m2-media-refs","m2-audit"], "m2-rls":["m2-fk-constraints"], "m2-migrations":["m2-payload-collections"],

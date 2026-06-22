@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ayurveda Wellness</title>
+  <style>
+    body { margin: 0; font-family: Georgia, serif; color: #2b2b2b; }
+    .hero { padding: 80px 40px; text-align: center; background: #f3efe6; }
+    .hero img { width: 220px; height: 160px; object-fit: cover; border-radius: 12px; margin-top: 20px; }
+    .hero h1 { font-size: 44px; margin: 0 0 12px; color: #6b4f2a; }
+    .hero p { font-size: 20px; color: #5a5a5a; }
+    .about { padding: 60px 40px; max-width: 680px; margin: 0 auto; text-align: center; }
+    .about h2 { color: #6b4f2a; }
+    .cta { display: inline-block; margin-top: 16px; padding: 12px 26px; background: #6b4f2a; color: #fff; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <!-- Each editable spot reads from content.json and carries a data-sa marker
+       (key = the content field). The marker is how click-to-edit maps a click
+       back to the right content field. -->
+  <section class="hero">
+    <h1 data-sa="text:hero.heading">{{hero.heading}}</h1>
+    <p data-sa="text:hero.subheading">{{hero.subheading}}</p>
+    <img data-sa="image:hero.image" src="{{hero.image}}" alt="" />
+  </section>
+  <section class="about">
+    <h2 data-sa="text:about.title">{{about.title}}</h2>
+    <p data-sa="text:about.body">{{about.body}}</p>
+    <span class="cta" data-sa="text:cta.button">{{cta.button}}</span>
+  </section>
+</body>
+</html>

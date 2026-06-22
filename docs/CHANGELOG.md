@@ -1,5 +1,32 @@
 # Changelog
 
+## 2026-06-23
+
+**`12:30 AM`**
+- **Connected-site text editing reworked to be piece-by-piece and non-destructive.** Each text run is now its own editable box, so a heading like "Powering the AI era with **high-density compute** built to last" edits as three separate pieces with the coloured word/styling kept. Edits happen **in place** (the page is never rebuilt), which **fixes the reordering bug** (the coloured phrase no longer jumps to the end), preserves spacing, comments, cards, and all structure, and means **Publish outputs your exact original HTML** with only the words changed. Content still lives in Payload; the code is never touched. Verified on fixtures (order, spaces, comments, cards, checkbox, icon+text, images) + multi-page shared sync.
+
+## 2026-06-22
+
+**`09:30 PM`**
+- **Connected-site editing brought up to the builder's level.** The in-preview editor now: edits text **inline** (click and type, keeping icons/inline pieces intact), shows a **real dropdown menu** (Edit with AI / Change image) via a floating **⋮** that never gets clipped, and **"Edit with AI" targets the item in chat** (no popup). **Edit mode toggles instantly** (no reload). The chat panel matches the builder — **message bubbles**, **attach/paste a reference image** (e.g. a screenshot to copy wording from), and an **auto-growing** box with no scrollbar.
+- **Undo** for connected edits (reverts your last change), and **styled/split text** (e.g. a two-colour logo) is now fully editable without duplicating text.
+- **Publish fixes:** the real failure reason is shown (e.g. "No Cloudflare project set"), you can **set the Cloudflare project from the editor**, and removing a site now also **deletes its pulled repo/built files** from disk.
+- **Connect a GitHub URL** (we clone + build it), works for sites **not yet deployed** (first Publish creates the Cloudflare project), and deploys to the site's **exact** project.
+- **Dev speed:** `pnpm dev` now uses file polling (fixes the network-drive watcher), plus a faster `pnpm dev:fast` (Turbopack).
+
+**`05:30 PM`**
+- **One workspace, with a simple "New" menu.** The two separate screens (build-from-scratch and edit-a-connected-site) are now **one screen**. A **"New ▾"** button at the top lets you **Connect a website** or **Create from scratch**, and a **History** list reopens anything you've already connected or the builder. Both open in the **same editing layout** (chat panel, live preview, edit-mode toggle).
+- **Connecting now handles a real, whole website — not just one page.** You point SiteAgent at the **built site folder (`dist`) or a GitHub repo** (it builds the repo for you). It loads **every page plus all the styles, scripts, and images**, so the preview looks exactly like the real site. You can switch between pages, and **edit text & images by clicking or by chat** — all saved as drafts in the CMS; **the website's code is never touched**.
+- **Publish now redeploys the whole site** (every page + all assets, with your edits) to the **same web address**, with one-click rollback. Connected sites are **content-only** for now (no adding pages/sections — that's a later phase).
+- **You can connect a site that isn't deployed yet.** Give just the code (folder or repo) and leave the live address blank — you can edit straight away, and **Publish does the first Cloudflare deploy for you** (creates the project) and fills in the live address. Also fixed publishing to use the site's **exact** Cloudflare project name, so it updates the real site instead of a new one.
+- **Swapped images now show on the live site** — uploaded replacement images are bundled into the deployed site (no more broken images after publish).
+- Cleaned up the build standard into a professional, rules-only `docs/templateRule.md` (replaces `docs/rules.md`).
+
+**`03:30 PM`**
+- **New capability — edit an existing website with SiteAgent.** A client can hand over a static website they already built (its address + a Cloudflare key), and SiteAgent now: **connects** to it (reads every text and image into the CMS), lets you **edit any of them — by clicking on a live preview or by chatting with the AI** (saved as drafts), and on **Publish** puts the changes back at the **same web address** — the design is never touched. Safety built in: edits stay drafts until Publish, the new version is checked before going live, and there's **one-click rollback**. Verified the connect → edit (text + image) → render loop on a sample site, with the design and untouched parts preserved; the live deploy reuses the existing Cloudflare publishing.
+- Added **`docs/rules.md`** — the standard a client follows when building a site so SiteAgent can edit it (recommended stack, the one golden rule, optional `data-sa` markers, images, handover checklist, example).
+- The project tracker now has a **"Connected Sites"** module reflecting this work.
+
 ## 2026-06-20
 
 **`06:50 PM`**

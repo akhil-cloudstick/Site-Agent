@@ -13,6 +13,7 @@ import { Media } from './collections/Media'
 import { Tenants } from './collections/Tenants'
 import { Changesets } from './collections/Changesets'
 import { Pages } from './collections/Pages'
+import { ConnectedSites } from './collections/ConnectedSites'
 import { getEnv } from './config/env'
 
 const env = getEnv()
@@ -27,7 +28,7 @@ export default buildConfig({
       baseDir: path.resolve(dirname),
     },
   },
-  collections: [Users, Media, Tenants, Changesets, Pages],
+  collections: [Users, Media, Tenants, Changesets, Pages, ConnectedSites],
   // Expected access-control denials (403 "not allowed") are logged at ERROR with
   // a full stack by default — far too noisy. Drop them below the default visible
   // level so the console shows only genuine problems. Real (non-Forbidden) errors
@@ -63,6 +64,7 @@ export default buildConfig({
       collections: {
         pages: {},
         media: {},
+        connectedSites: {},
       },
       userHasAccessToAllTenants: (user) => Boolean(user?.isOperator),
     }),
