@@ -192,7 +192,23 @@ const EDITOR_SCRIPT = `<script>(function(){
   var fab=document.createElement('button');fab.type='button';fab.textContent='\\u22EE';fab.title='Options';
   fab.style.cssText='position:fixed;display:none;z-index:2147483646;width:24px;height:24px;border-radius:6px;border:1px solid rgba(0,0,0,.12);background:#fff;color:#475467;cursor:pointer;font-size:14px;line-height:1;padding:0;box-shadow:0 1px 4px rgba(0,0,0,.3);';
   document.body.appendChild(fab);
-  function place(){ if(active&&hovered){var r=hovered.getBoundingClientRect();var top=r.top-26; if(top<2)top=r.top+2; var left=Math.min(r.right-11,window.innerWidth-28); fab.style.left=Math.max(2,left)+'px';fab.style.top=top+'px';fab.style.display='block';}else{fab.style.display='none';} }
+  function place(){
+    if(!(active&&hovered)){fab.style.display='none';return;}
+    var r=hovered.getBoundingClientRect();
+    // Sit just ABOVE the block's top-right corner, OUTSIDE the box (never on top of it).
+    // If there's no room above (block hugs the top), sit on the RIGHT side instead —
+    // outside the box, never below it.
+    var top,left;
+    if(r.top<30){
+      left=r.right+4;          // right side, outside the box
+      top=Math.max(2,r.top);
+    } else {
+      left=r.right-24;         // top-right corner
+      top=r.top-28;            // above the box, outside
+    }
+    left=Math.min(left,window.innerWidth-28);
+    fab.style.left=Math.max(2,left)+'px';fab.style.top=Math.max(2,top)+'px';fab.style.display='block';
+  }
 
   function closeMenu(){var m=document.getElementById('__sa_menu');if(m)m.remove();}
   document.addEventListener('click',function(e){var t=e.target;if(t!==fab&&!(t&&t.closest&&t.closest('#__sa_menu')))closeMenu();},true);
@@ -216,7 +232,7 @@ const EDITOR_SCRIPT = `<script>(function(){
     el.setAttribute('contenteditable','true');el.focus();
     function done(){el.removeAttribute('contenteditable');var after=directText(el);if(after.trim()!==before.trim())post({saEdit:{id:id,kind:'text',value:after.trim()}});el.removeEventListener('blur',done);}
     el.addEventListener('blur',done);
-    el.addEventListener('keydown',function(k){if(k.key==='Enter'&&!k.shiftKey){k.preventDefault();el.blur();}});
+    el.addEventListener('keydown',function(k){if((k.key==='Enter'&&!k.shiftKey)||k.key==='Escape'){k.preventDefault();el.blur();}});
   }
 
   items.forEach(function(el){

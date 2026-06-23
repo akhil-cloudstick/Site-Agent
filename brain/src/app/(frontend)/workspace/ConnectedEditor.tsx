@@ -404,6 +404,7 @@ export function ConnectedEditor({
                   const t = e.target
                   t.style.height = 'auto'
                   t.style.height = Math.min(t.scrollHeight, 160) + 'px'
+                  t.style.overflowY = t.scrollHeight > 160 ? 'auto' : 'hidden'
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
