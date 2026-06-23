@@ -73,6 +73,7 @@ export interface Config {
     changesets: Changeset;
     pages: Page;
     connectedSites: ConnectedSite;
+    jobs: Job;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -86,6 +87,7 @@ export interface Config {
     changesets: ChangesetsSelect<false> | ChangesetsSelect<true>;
     pages: PagesSelect<false> | PagesSelect<true>;
     connectedSites: ConnectedSitesSelect<false> | ConnectedSitesSelect<true>;
+    jobs: JobsSelect<false> | JobsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -451,6 +453,41 @@ export interface ConnectedSite {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "jobs".
+ */
+export interface Job {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  type: 'connect' | 'publish' | 'delete';
+  siteId?: number | null;
+  status?: ('running' | 'cancelling' | 'done' | 'error' | 'cancelled') | null;
+  percent?: number | null;
+  stage?: string | null;
+  logs?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  error?: string | null;
+  result?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  finishedAt?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
 export interface PayloadKv {
@@ -496,6 +533,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'connectedSites';
         value: number | ConnectedSite;
+      } | null)
+    | ({
+        relationTo: 'jobs';
+        value: number | Job;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -777,6 +818,24 @@ export interface ConnectedSitesSelect<T extends boolean = true> {
   publishedContent?: T;
   previousContent?: T;
   undoStack?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "jobs_select".
+ */
+export interface JobsSelect<T extends boolean = true> {
+  tenant?: T;
+  type?: T;
+  siteId?: T;
+  status?: T;
+  percent?: T;
+  stage?: T;
+  logs?: T;
+  error?: T;
+  result?: T;
+  finishedAt?: T;
   updatedAt?: T;
   createdAt?: T;
 }

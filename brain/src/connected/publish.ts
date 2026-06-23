@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { copyFile, cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
+import { CancelledError, noopCtx, type JobCtx } from '../jobs/registry'
 import { cloudflareConfigured, deployConnectedSite } from '../publish/deploy-cloudflare'
 import type { ContentMap } from './content'
 import { applyContent } from './html'
@@ -66,10 +67,13 @@ function fileForRoute(dir: string, route: string): string | null {
  * copy the managed folder (all pages + CSS/JS/images), then apply the content onto
  * each page in place. Returns the folder path.
  */
-export async function buildWholeSite(sourcePath: string, sourceHtml: PageHtmlMap, content: SiteContentMap, dir: string) {
+export async function buildWholeSite(sourcePath: string, sourceHtml: PageHtmlMap, content: SiteContentMap, dir: string, ctx: JobCtx = noopCtx) {
+  ctx.reporter(20, 'Assembling the whole site…')
   await rm(dir, { recursive: true, force: true })
   await cp(sourcePath, dir, { recursive: true })
+  ctx.reporter(45, 'Bundling images…')
   const bundled = await bundleMedia(content, dir)
+  ctx.reporter(60, 'Applying your changes…')
   for (const [route, html] of Object.entries(sourceHtml)) {
     const dest = fileForRoute(dir, route)
     // Apply onto the stored HTML (clean, no editor/prefix) and write to the page's file.
@@ -97,7 +101,8 @@ export function renderSite(sourceHtml: PageHtmlMap, content: SiteContentMap): Pa
  * own Cloudflare project (same URL), then rotate snapshots (previous ← published,
  * published ← draft) so rollback is one step. Returns the live URL.
  */
-export async function publishConnectedSite(tenantId: number, siteId: number): Promise<{ url: string }> {
+export async function publishConnectedSite(tenantId: number, siteId: number, ctx: JobCtx = noopCtx): Promise<{ url: string }> {
+  ctx.reporter(5, 'Preparing to publish…')
   const site = (await getConnectedSite(tenantId, siteId)) as any
   if (!site) throw new Error('Site not found')
   if (!cloudflareConfigured()) throw new Error('Cloudflare is not configured')
@@ -110,9 +115,10 @@ export async function publishConnectedSite(tenantId: number, siteId: number): Pr
 
   if (site.sourcePath && existsSync(site.sourcePath)) {
     // Whole-site deploy: keep all pages + CSS/JS/images, apply content onto each page.
-    await buildWholeSite(site.sourcePath, sourceHtml, draft, dir)
+    await buildWholeSite(site.sourcePath, sourceHtml, draft, dir, ctx)
   } else {
     // Fallback (single self-contained page, no managed folder): just the rendered HTML.
+    ctx.reporter(45, 'Assembling the site…')
     await rm(dir, { recursive: true, force: true })
     await mkdir(dir, { recursive: true })
     const rendered = renderSite(sourceHtml, await bundleMedia(draft, dir))
@@ -123,7 +129,10 @@ export async function publishConnectedSite(tenantId: number, siteId: number): Pr
     }
   }
 
-  const { url: deployedUrl } = await deployConnectedSite(project, dir)
+  if (ctx.shouldCancel()) throw new CancelledError()
+  ctx.reporter(75, 'Uploading to Cloudflare…')
+  const { url: deployedUrl } = await deployConnectedSite(project, dir, ctx.registerChild)
+  ctx.reporter(95, 'Finishing up…')
   // The live URL is the site's own address if it has one (custom domain), else the
   // Cloudflare URL we just deployed to (e.g. a brand-new, not-previously-deployed site).
   const originUrl = typeof site.originUrl === 'string' ? site.originUrl.trim() : ''
@@ -141,10 +150,11 @@ export async function publishConnectedSite(tenantId: number, siteId: number): Pr
 }
 
 /** Roll back: make the previous published content the live + draft content again, and redeploy. */
-export async function rollbackConnectedSite(tenantId: number, siteId: number): Promise<{ url: string }> {
+export async function rollbackConnectedSite(tenantId: number, siteId: number, ctx: JobCtx = noopCtx): Promise<{ url: string }> {
+  ctx.reporter(5, 'Restoring the previous version…')
   const site = (await getConnectedSite(tenantId, siteId)) as any
   if (!site) throw new Error('Site not found')
   const previous: SiteContentMap = site.previousContent ?? {}
   await updateConnectedSite(tenantId, siteId, { draftContent: previous })
-  return publishConnectedSite(tenantId, siteId)
+  return publishConnectedSite(tenantId, siteId, ctx)
 }

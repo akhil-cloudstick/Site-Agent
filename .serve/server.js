@@ -10,6 +10,8 @@ const DIR = __dirname;
 const STATE_FILE = path.join(DIR, "state.json");
 // The single source-of-truth page (lives here in .serve). Edit it and refresh — no copy step.
 const PAGE_FILE = path.join(DIR, "ProjectPlan.html");
+// Read-only changelog shown in the page's right rail (the plain-language client log).
+const CHANGELOG_FILE = path.join(DIR, "..", "docs", "CHANGELOG.md");
 const STATUSES = new Set(["todo", "in_progress", "done", "blocked"]);
 
 // ---- in-memory shared store, persisted to disk ----
@@ -86,6 +88,15 @@ const server = http.createServer(async (req, res) => {
       persist();
       return sendJSON(res, 200, { rev: store.rev });
     } catch (e) { return sendJSON(res, 400, { error: "bad json" }); }
+  }
+
+  // ---- read-only changelog feed (plain markdown text; the page parses it) ----
+  if (url === "/api/changelog" && req.method === "GET") {
+    return fs.readFile(CHANGELOG_FILE, "utf8", (err, text) => {
+      if (err) return sendJSON(res, 404, { error: "no changelog" });
+      res.writeHead(200, { "Content-Type": "text/markdown; charset=utf-8", "Cache-Control": "no-store" });
+      res.end(text);
+    });
   }
 
   // ---- static: serve ONLY the project plan page (self-contained, no other files) ----

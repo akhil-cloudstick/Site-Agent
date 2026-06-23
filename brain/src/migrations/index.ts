@@ -19,6 +19,7 @@ import * as migration_20260622_092510_connected_sites from './20260622_092510_co
 import * as migration_20260622_094940_connected_source_html from './20260622_094940_connected_source_html';
 import * as migration_20260622_114414_connected_whole_site from './20260622_114414_connected_whole_site';
 import * as migration_20260622_153507_connected_undo_stack from './20260622_153507_connected_undo_stack';
+import * as migration_20260623_101221_jobs from './20260623_101221_jobs';
 
 export const migrations = [
   {
@@ -124,6 +125,11 @@ export const migrations = [
   {
     up: migration_20260622_153507_connected_undo_stack.up,
     down: migration_20260622_153507_connected_undo_stack.down,
-    name: '20260622_153507_connected_undo_stack'
+    name: '20260622_153507_connected_undo_stack',
+  },
+  {
+    up: migration_20260623_101221_jobs.up,
+    down: migration_20260623_101221_jobs.down,
+    name: '20260623_101221_jobs'
   },
 ];

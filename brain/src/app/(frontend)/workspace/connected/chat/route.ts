@@ -33,6 +33,10 @@ export async function POST(req: NextRequest) {
   if (edits.length === 0) {
     return NextResponse.json({ ok: true, count: 0, message: "I couldn't find anything to change for that — nothing was changed." })
   }
-  for (const e of edits) await setDraftValue(tenantId, siteId, pathname, e.id, 'text', e.value)
-  return NextResponse.json({ ok: true, count: edits.length, message: `Done — updated ${edits.length} item${edits.length === 1 ? '' : 's'}.` })
+  const affected = new Set<string>()
+  for (const e of edits) {
+    const paths = await setDraftValue(tenantId, siteId, pathname, e.id, 'text', e.value)
+    paths.forEach((p) => affected.add(p))
+  }
+  return NextResponse.json({ ok: true, count: edits.length, message: `Done — updated ${edits.length} item${edits.length === 1 ? '' : 's'}.`, paths: Array.from(affected) })
 }

@@ -2,6 +2,28 @@
 
 ## 2026-06-23
 
+**`06:30 PM`**
+- **Connect & Publish now show a real progress bar (and can be cancelled).** The slow steps — cloning/building a repo, copying the whole site, uploading to Cloudflare — run as a **background job** with a live, **server-tracked progress bar** in a blocking modal. It **survives a page refresh** (progress is polled from the server, not held in the tab), shows clear stage messages ("Cloning…", "Building…", "Uploading to Cloudflare…", "Done"), and a **Cancel** button that actually stops the work (kills the running clone/build/deploy and cleans up). Backed by a small jobs layer (`src/jobs/*`).
+- **Editor ⋮ badge edge-case fixed** — the options badge now stays **outside** each text block (above, or below when the block is flush to the top), never covering the text.
+
+**`05:10 PM`**
+- **Edit mode no longer navigates away.** In a connected site's preview, with Edit mode ON, clicking a link, button, or card no longer follows it / triggers the site's own scripts — you're clicking to *edit the text*, so the page stays put and the click opens the editor instead. With Edit mode OFF the preview browses normally (and the workspace page tabs switch pages either way).
+- **Shared footer/nav/logo edits now show on every page instantly.** Editing a shared component (e.g. the footer) on one page already updated all pages in the CMS, but the other pages' previews only showed it after a manual refresh or publish. Now every page the component appears on refreshes automatically — open another page and the change is already there.
+- **Progress modal reliability:** fixed a write race that could leave the publish modal stuck at 100% (now it shows **Done** and auto-closes), and made stale-job cleanup **non-destructive** — it can no longer delete a connected site's local files (an earlier version could wipe a site's CSS/JS/images if a publish job was interrupted).
+
+**`04:05 PM`**
+- **Live progress for connect, publish & remove — no more waiting in the dark.** Connecting a site (GitHub repo or folder), publishing, and removing a site now each show a **progress modal**: the page behind it blurs, a real **% bar** moves through honest milestones, and a **live one-line log feed** below it tells you exactly what's happening right now ("Cloning AtlasInfra…", "Installing dependencies…", "Building the site…", "Uploading to Cloudflare…") — the current line animates with typing dots and each finished step freezes with a ✓ (or a plain-English error line if something fails — never a raw terminal dump).
+- **Cancel any of them.** A **Cancel** button stops the operation, kills the underlying process (git/npm/wrangler) and **cleans up the half-cloned files**, showing its own "removing files…" progress.
+- **Survives a refresh _and_ a server restart.** Progress is tracked server-side (a new `jobs` record + an in-memory live registry), so refreshing the page **re-attaches** to the running job and keeps showing progress. If the server restarts mid-operation, the stranded job is detected, marked failed, and its orphaned folder is cleaned up automatically.
+- **Interactive chat.** When you send a message in a connected site's chat, you now immediately get a **shimmering skeleton reply** with a cycling status ("Reading the page → Asking the model → Applying the change") instead of a static wait — it's replaced by the real answer when it's ready.
+- **Also fixed a latent leak:** a failed connect used to leave its cloned folder behind on disk; it's now removed on failure/cancel. The remove-site confirmation is now a themed in-app dialog (no more native browser popup).
+
+**`11:00 AM`**
+- **Connected-sites loop verified end-to-end on a real site.** Connected a real multi-page Astro repo (cloned + built), edited content **by clicking and by AI chat**, swapped an image, **published to Cloudflare**, and confirmed the changes show on the **live published URL** — plus **rollback** and **undo** working. The core "edit any client site → publish to the same URL" idea is working.
+- **Marked headings + doctype + page tabs fixed.** `data-sa`-marked headings now expose **every** text piece (not just the first); the page reads content **only from `<body>`** so `<!DOCTYPE html>` no longer leaks as visible text; all **page tabs appear immediately** after connecting (switch pages without leaving edit mode).
+- **Publish proven faithful.** Verified the publish output is **byte-for-byte identical** to the site's built HTML (only the edited words change) — a reported "card layout changed after publish" turned out to be an **Astro dev-vs-production-build** quirk in the client's own site, not SiteAgent.
+- **Editor polish:** the ⋮ options badge now floats **outside** each text block (above/below), never over the text; preview page-switches **crossfade** (double-buffered iframes) instead of flashing white.
+
 **`12:30 AM`**
 - **Connected-site text editing reworked to be piece-by-piece and non-destructive.** Each text run is now its own editable box, so a heading like "Powering the AI era with **high-density compute** built to last" edits as three separate pieces with the coloured word/styling kept. Edits happen **in place** (the page is never rebuilt), which **fixes the reordering bug** (the coloured phrase no longer jumps to the end), preserves spacing, comments, cards, and all structure, and means **Publish outputs your exact original HTML** with only the words changed. Content still lives in Payload; the code is never touched. Verified on fixtures (order, spaces, comments, cards, checkbox, icon+text, images) + multi-page shared sync.
 

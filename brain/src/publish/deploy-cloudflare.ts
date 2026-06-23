@@ -1,10 +1,11 @@
-import { spawn } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 
 import { getEnv } from '../config/env'
 
-function run(args: string[], env: NodeJS.ProcessEnv): Promise<{ code: number; out: string }> {
+function run(args: string[], env: NodeJS.ProcessEnv, onChild?: (c: ChildProcess) => void): Promise<{ code: number; out: string }> {
   return new Promise((resolve) => {
-    const child = spawn('npx', ['--no-install', 'wrangler', ...args], { env, shell: true })
+    const child = spawn('npx', ['--no-install', 'wrangler', ...args], { env, shell: true, detached: process.platform !== 'win32' })
+    onChild?.(child)
     let out = ''
     child.stdout.on('data', (d) => (out += d.toString()))
     child.stderr.on('data', (d) => (out += d.toString()))
@@ -25,8 +26,9 @@ const sanitizeProject = (name: string) => name.toLowerCase().replace(/[^a-z0-9-]
 const projectName = (slug: string) => sanitizeProject(`siteagent-${slug}`)
 
 /** Deploy a static folder to a Cloudflare Pages project by its exact name (creating it
- *  on first deploy). Shared by both the builder and connected-site publishing. */
-async function deployDir(project: string, dir: string): Promise<{ url: string; project: string }> {
+ *  on first deploy). Shared by both the builder and connected-site publishing.
+ *  `onChild` lets a job register the spawned wrangler process so cancel can kill it. */
+async function deployDir(project: string, dir: string, onChild?: (c: ChildProcess) => void): Promise<{ url: string; project: string }> {
   const env = getEnv()
   if (!env.cloudflareAccountId || !env.cloudflareApiToken) throw new Error('Cloudflare is not configured.')
   const childEnv: NodeJS.ProcessEnv = {
@@ -36,9 +38,9 @@ async function deployDir(project: string, dir: string): Promise<{ url: string; p
   }
 
   // Create the project (idempotent — an "already exists" failure is fine).
-  await run(['pages', 'project', 'create', project, '--production-branch', 'main'], childEnv)
+  await run(['pages', 'project', 'create', project, '--production-branch', 'main'], childEnv, onChild)
   // Direct-upload the static folder.
-  const res = await run(['pages', 'deploy', dir, '--project-name', project, '--branch', 'main', '--commit-dirty=true'], childEnv)
+  const res = await run(['pages', 'deploy', dir, '--project-name', project, '--branch', 'main', '--commit-dirty=true'], childEnv, onChild)
 
   // A *.pages.dev URL (host may have multiple subdomain segments) or a "complete"
   // line means success → return the stable production URL for the project.
@@ -60,8 +62,8 @@ export function deployToCloudflare(slug: string, dir: string): Promise<{ url: st
  * client gave (no namespacing) — so we update their real site, or create it on the
  * first deploy if it doesn't exist yet. Returns the project's *.pages.dev URL.
  */
-export function deployConnectedSite(project: string, dir: string): Promise<{ url: string; project: string }> {
+export function deployConnectedSite(project: string, dir: string, onChild?: (c: ChildProcess) => void): Promise<{ url: string; project: string }> {
   const name = sanitizeProject(project)
   if (!name) throw new Error('Invalid Cloudflare project name')
-  return deployDir(name, dir)
+  return deployDir(name, dir, onChild)
 }

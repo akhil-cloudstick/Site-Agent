@@ -236,10 +236,10 @@ const EDITOR_SCRIPT = `<script>(function(){
   }
 
   items.forEach(function(el){
-    var id=el.getAttribute('data-sa-id'),kind=el.getAttribute('data-sa-kind');
+    // Only hover highlighting per item; clicks are handled by one capture-phase handler
+    // below (so we can fully block the page's own navigation while editing).
     el.addEventListener('mouseenter',function(){if(active){hovered=el;el.style.outline=SOLID;place();}});
     el.addEventListener('mouseleave',function(){if(active&&!el.isContentEditable)el.style.outline=DASH;});
-    el.addEventListener('click',function(ev){if(!active||el.isContentEditable)return;ev.preventDefault();ev.stopPropagation();if(kind==='image')post({saEdit:{id:id,kind:'image'}});else startTextEdit(el,id);});
   });
 
   function setActive(on){
@@ -251,4 +251,41 @@ const EDITOR_SCRIPT = `<script>(function(){
   window.addEventListener('message',function(e){if(e.data&&typeof e.data.saEditMode==='boolean')setActive(e.data.saEditMode);});
   window.addEventListener('scroll',place,true);
   window.addEventListener('resize',place);
+
+  // One capture-phase click handler for the whole page.
+  //  - EDIT MODE ON: the page is INERT — clicking a link/button/card never navigates or
+  //    fires the site's own handlers (the user is clicking to EDIT, not to browse).
+  //    Clicking an editable item starts its text/image edit; clicks on our own editor UI
+  //    pass through. (Page switching is still available via the workspace's page tabs.)
+  //  - EDIT MODE OFF: same-origin link clicks are handed to the parent for a smooth
+  //    crossfade page switch; everything else behaves normally.
+  document.addEventListener('click',function(e){
+    var t=e.target;
+    // Our own editor UI (the ⋮ button + its menu) always works.
+    if(t&&((fab.contains&&fab.contains(t))||(t.closest&&t.closest('#__sa_menu'))))return;
+
+    if(active){
+      var item=t&&t.closest&&t.closest('[data-sa-id]');
+      if(item&&item.isContentEditable)return; // typing — let clicks place the caret
+      // Block navigation AND the site's own click handlers while editing.
+      e.preventDefault();e.stopPropagation();if(e.stopImmediatePropagation)e.stopImmediatePropagation();
+      if(item){
+        var id=item.getAttribute('data-sa-id'),kind=item.getAttribute('data-sa-kind');
+        if(kind==='image')post({saEdit:{id:id,kind:'image'}});else startTextEdit(item,id);
+      }
+      return;
+    }
+
+    // Edit mode off → intercept same-origin links for the parent's crossfade page switch.
+    var a=t&&t.closest&&t.closest('a[href]');
+    if(!a)return;
+    if(a.target&&a.target!=='_self')return;
+    var href=a.getAttribute('href')||'';
+    if(!href||href.charAt(0)==='#'||/^(mailto:|tel:|javascript:)/i.test(href))return;
+    var url;try{url=new URL(a.href,location.href);}catch(_){return;}
+    if(url.origin!==location.origin)return;
+    if(url.pathname===location.pathname){if(url.hash)return;} // same page (maybe #anchor) — leave it
+    e.preventDefault();
+    post({saNav:url.pathname});
+  },true);
 })();</script>`

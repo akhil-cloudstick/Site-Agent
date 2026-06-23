@@ -27,8 +27,8 @@ export async function POST(req: NextRequest) {
       if (!file.type.startsWith('image/')) return NextResponse.json({ ok: false, message: 'Please upload an image.' }, { status: 400 })
       const buffer = Buffer.from(await file.arrayBuffer())
       const media = (await uploadTenantMedia(tenantId, { buffer, filename: file.name || 'upload', mimetype: file.type, alt: file.name || 'image' })) as any
-      await setDraftValue(tenantId, siteId, pathname, id, 'image', media.url ?? '')
-      return NextResponse.json({ ok: true, value: media.url })
+      const paths = await setDraftValue(tenantId, siteId, pathname, id, 'image', media.url ?? '')
+      return NextResponse.json({ ok: true, value: media.url, paths })
     }
 
     const body = await req.json()
@@ -37,8 +37,8 @@ export async function POST(req: NextRequest) {
     const id = String(body?.id || '')
     const value = String(body?.value ?? '')
     if (!siteId || !id) return NextResponse.json({ ok: false, message: 'Bad request.' }, { status: 400 })
-    await setDraftValue(tenantId, siteId, pathname, id, 'text', value)
-    return NextResponse.json({ ok: true })
+    const paths = await setDraftValue(tenantId, siteId, pathname, id, 'text', value)
+    return NextResponse.json({ ok: true, paths })
   } catch (err) {
     return NextResponse.json({ ok: false, message: err instanceof Error ? err.message : 'Could not save.' }, { status: 500 })
   }

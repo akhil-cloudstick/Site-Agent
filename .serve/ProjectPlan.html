@@ -41,7 +41,7 @@
     --done:#2ea043; --prog:#3b82f6; --blocked:#e5534b; --todo:#6b7785;
     --crit:#e5534b; --accent:#58a6ff; --focus:#ffd166;
     --radius:12px; --shadow:0 1px 3px rgba(0,0,0,.35);
-    --sidebar:300px;
+    --sidebar:300px; --changelog:440px;
   }
   *{box-sizing:border-box}
   html,body{margin:0;background:var(--bg);color:var(--ink);
@@ -220,8 +220,36 @@
   .waves .wid:hover{color:var(--accent)}
   details.mod > summary, details.sm > summary{user-select:none}
 
+  /* ---------- right rail: read-only changelog ---------- */
+  .changelog{width:var(--changelog);flex:none;position:sticky;top:0;height:100vh;overflow-y:auto;
+    background:var(--panel);border-left:1px solid var(--line);padding:22px 18px;display:flex;flex-direction:column;gap:16px}
+  .changelog[hidden]{display:none}
+  .cl-head{display:flex;flex-direction:column;gap:3px}
+  .cl-head .clt{font-size:15px;font-weight:700;letter-spacing:.2px}
+  .cl-head .cls{font-size:11px;color:var(--faint)}
+  .cl-list{display:flex;flex-direction:column;gap:12px}
+  .cl-entry{border:1px solid var(--line);border-radius:10px;background:var(--panel2);padding:13px 14px;transition:border-color .15s}
+  .cl-entry:hover{border-color:var(--line2)}
+  .cl-entry .cl-when{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:9px}
+  .cl-date{font-size:13px;font-weight:700;color:#d5dde5}
+  .cl-time{font-size:10.5px;padding:2px 9px;border-radius:20px;border:1px solid #274a7a;background:#13243a;color:#9ec5ff;
+    font-weight:600;letter-spacing:.3px;font-variant-numeric:tabular-nums}
+  .cl-items{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+  .cl-items li{position:relative;padding-left:15px;font-size:12.5px;line-height:1.55;color:#c2ccd6}
+  .cl-items li::before{content:"";position:absolute;left:2px;top:8px;width:5px;height:5px;border-radius:50%;background:var(--accent);opacity:.7}
+  .cl-items li strong{color:#e9eef3;font-weight:650}
+  .cl-items code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:#bcc6d0;
+    background:rgba(255,255,255,.05);padding:1px 5px;border-radius:4px}
+  .cl-empty{font-size:12px;color:var(--faint);padding:6px 2px}
+
   /* ---------- mobile: sidebar collapses to top ---------- */
   .menu-toggle{display:none}
+  @media (max-width:1180px){
+    .changelog{width:100%;height:auto;position:static;border-left:none;border-top:1px solid var(--line)}
+    .shell{flex-wrap:wrap}
+    .main{flex:1 1 100%;order:0}
+    .changelog{order:1}
+  }
   @media (max-width:920px){
     .shell{flex-direction:column}
     .sidebar{width:100%;height:auto;position:static;border-right:none;border-bottom:1px solid var(--line)}
@@ -334,6 +362,14 @@
       </footer>
     </div>
   </main>
+
+  <aside class="changelog" id="changelog" aria-label="Changelog" hidden>
+    <div class="cl-head">
+      <span class="clt">Changelog</span>
+      <span class="cls">What's shipped — latest first</span>
+    </div>
+    <div class="cl-list" id="changelogList"></div>
+  </aside>
 </div>
 
 <script>
@@ -1194,6 +1230,58 @@ function renderWaves(){
   });
 }
 
+/* ============================ CHANGELOG (read-only, right rail) ============================
+   Fetches docs/CHANGELOG.md (served by server.js at api/changelog), parses each
+   timestamped group into a block, and renders them latest-first (file order kept).
+   Display only — never touches task status/progress. No server → rail stays hidden. */
+function clEscape(s){ return s.replace(/[&<>]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+function clInline(s){
+  return clEscape(s)
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+}
+function parseChangelog(md){
+  const entries=[]; let date="", cur=null;
+  md.split(/\r?\n/).forEach(line=>{
+    let m;
+    if((m=line.match(/^##\s+(.+?)\s*$/))){ date=m[1]; cur=null; return; }
+    if((m=line.match(/^\*\*\s*`?\s*(.+?)\s*`?\s*\*\*\s*$/))){           // **`11:00 AM`** time header
+      cur={ date, time:m[1], items:[] }; entries.push(cur); return;
+    }
+    if((m=line.match(/^[-*]\s+(.+?)\s*$/))){                            // - bullet
+      if(!cur){ cur={ date, time:"", items:[] }; entries.push(cur); }
+      cur.items.push(m[1]);
+    }
+  });
+  return entries.filter(e=>e.items.length);
+}
+function renderChangelog(entries){
+  const list=$("changelogList"); list.textContent="";
+  if(!entries.length){
+    const p=document.createElement("div"); p.className="cl-empty"; p.textContent="No changelog entries yet.";
+    list.appendChild(p); return;
+  }
+  entries.forEach(e=>{
+    const box=document.createElement("div"); box.className="cl-entry";
+    const when=document.createElement("div"); when.className="cl-when";
+    const d=document.createElement("span"); d.className="cl-date"; d.textContent=e.date; when.appendChild(d);
+    if(e.time){ const t=document.createElement("span"); t.className="cl-time"; t.textContent=e.time; when.appendChild(t); }
+    box.appendChild(when);
+    const ul=document.createElement("ul"); ul.className="cl-items";
+    e.items.forEach(it=>{ const li=document.createElement("li"); li.innerHTML=clInline(it); ul.appendChild(li); });
+    box.appendChild(ul); list.appendChild(box);
+  });
+}
+async function changelogInit(){
+  try{
+    const r=await fetch("api/changelog",{cache:"no-store"});
+    if(!r.ok) throw 0;
+    const md=await r.text();
+    renderChangelog(parseChangelog(md));
+    const rail=$("changelog"); if(rail) rail.hidden=false;
+  }catch(e){ /* opened directly / no server → leave the rail hidden */ }
+}
+
 /* ============================ BOOT ============================ */
 function boot(){
   $("ver").textContent="v"+CONTENT.contentVersion;
@@ -1247,7 +1335,8 @@ function boot(){
     state.tasks={}; saveState(); serverPushBulk(true); render(); announce("All progress reset.");
   });
 
-  serverInit(); // if served by server.js, switch to shared multi-user mode
+  serverInit();    // if served by server.js, switch to shared multi-user mode
+  changelogInit(); // if served by server.js, show the read-only changelog rail
 }
 document.addEventListener("DOMContentLoaded",boot);
 </script>

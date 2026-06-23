@@ -12,9 +12,11 @@ Editable text and images **must be present in the built HTML** — not rendered 
 - **Allowed:** any static-site generator that outputs plain HTML (Astro, Eleventy, Hugo, Next.js static export, hand-written HTML).
 - **Not allowed:** client-side-rendered apps (empty-shell SPAs).
 
-## 3. Hosting
-- Static build → **Cloudflare Pages**, connected to the site's **GitHub repo** (auto-deploy on push).
-- Build output is a normal static folder (e.g. `dist/`).
+## 3. Hosting & how SiteAgent publishes
+- Host on **Cloudflare Pages**. Build output is a normal static folder (e.g. `dist/`).
+- SiteAgent **clones the repo, runs the build, applies your content edits, and direct-uploads the whole folder** to the Cloudflare Pages project (same URL). It does **not** push to GitHub or rely on git auto-deploy — it just needs the **Cloudflare Pages project name** (the API token lives in SiteAgent). If the site isn't on Cloudflare yet, the first publish **creates** the project.
+- **Caveat:** since content edits live in SiteAgent (not your source), don't rely on **git → Cloudflare auto-deploy** for a connected site — a later source push would rebuild from the repo and overwrite SiteAgent's edits. **SiteAgent owns the deploys.**
+- The repo must build with a standard command (`npm install && npm run build`) into a static folder (`dist` / `build` / `out` / `_site` / `public`).
 
 ## 4. Marking content (`data-sa`) — recommended
 SiteAgent auto-detects content, so tagging is optional — but a `data-sa` marker gives an element a **stable name that survives a redesign**. Use a dedicated `data-sa` attribute; never reuse `id`/`class`.
