@@ -71,6 +71,24 @@ _Things we deliberately simplified or postponed so the build stays vertical-slic
 - [ ] **Chat-edit needs `OPENROUTER_API_KEY`**; without it, click-to-edit still works.
 - [ ] **Auto-detected items** rely on stable element positions; explicit `data-sa` markers (per `docs/templateRule.md`) make them survive a future client redesign.
 
+## Operator admin panel (m11) — v1 done, follow-ups owed _(2026-06-24)_
+- [x] ~~**Operator dashboard (read-only).**~~ **Done (2026-06-24):** `/workspace/operator` — operator-gated (`isOperator`) cross-tenant overview: tenants + their connected sites (name, source, pages, live URL, status), member count, running jobs, and totals (tenants/sites/published/active jobs). Reads via the broker with operator scope. Code: `src/operator/dashboard.ts`, `app/(frontend)/workspace/operator/*`.
+- [ ] **Tenant actions** — suspend/resume, edit plan, remove a tenant from the panel (currently read-only; manage via Payload `/admin`).
+- [ ] **Billing & roles** (`m11-roles-open`) — plans/usage-based billing + multi-user team roles (who-can-publish) are still unspecified; decide before real teams.
+- [ ] **Usage history** — current panel shows live counts only; per-tenant usage over time (edits/publishes/storage) for billing comes later.
+- [ ] **`m11-github-app`** (per-repo installation tokens) + **`m11-secrets`** (all GitHub/Cloudflare/Payload secrets server-side only) — unbuilt; secrets currently in `brain/.env`.
+
+### Admin dashboard + route restructure + impersonation — shipped 2026-06-24 (built, plan grilled + Codex-reviewed)
+**Done:** `/` shared login (role-redirects), Payload moved to `/admin/payload`, `/admin` operator dashboard (tenants list + add-tenant + per-tenant detail + AI settings), server-enforced operator impersonation (`allowOperatorEdit` tenant toggle), DB-backed encrypted AI key/model settings, themed profile dropdown. Deny-by-default operator writes in `stampActiveChangeSet` + a `connectedSites` guard; 403 guards on all 16 mutation routes. Migration `20260624_074100_admin_impersonation_settings`. **Build green.**
+
+**Owed (deliberately deferred this pass — security holds without them; they are UX/coverage, not holes):**
+- [ ] **Apply the migration before use** — `pnpm payload migrate` (the new `settings` global + `tenants.allow_operator_edit` column don't exist in the DB yet; runtime will error until applied).
+- [ ] **Automated tests** the plan specified are NOT yet written: per-route 403 guard tests for every mutation, the "operator clears cookie → direct POST is still denied" test, the context-propagation-into-hook test, and the connected-site direct-write guard test. Enforcement is implemented; the test suite that proves it isn't.
+- [ ] **View-only UI affordance hiding is partial.** The server 403s every edit/publish path for a view-only operator and a banner explains it, but inside the block builder / connected editor some edit affordances still render and only fail on click (with a 403). `UnifiedWorkspace` already gates the drawer's write actions via `canEdit`; the inner editors don't yet.
+- [ ] **Impersonation attribution is a log line, not durable.** Editable-operator writes still flow through the tenant's service principal; `operatorUserId` isn't yet persisted on the ChangeSet/edit record (full append-only audit stays owed under `m2-audit`).
+- [ ] **`OperatorClient.tsx`** under `workspace/operator/` is now dead code (the panel moved to `/admin`); safe to delete.
+- [ ] **Tenant actions** (suspend/resume, edit plan, remove from the panel) and **billing** remain deferred as before.
+
 ## Remaining LOCAL polish (no accounts needed)
 - [x] **`pages` NOT NULL hardening** (`m2-fk-constraints`): **Done 2026-06-20** — migration `20260620_120000_pages_not_null` sets `NOT NULL` on `pages.tenant_id` + `pages.change_set_id_id`; verified seed + structure write paths still pass.
 - [x] **Product cards section**: **Done 2026-06-20** — `products` block (image, name, price, oldPrice, badge, button); AI-composable, verified.

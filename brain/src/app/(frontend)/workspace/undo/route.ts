@@ -1,18 +1,16 @@
 import { type NextRequest, NextResponse } from 'next/server'
 
 import { listTenantPages, updateTenantPage } from '@/broker/adapter'
-import { getSessionUser, tenantIdOfUser } from '@/auth/session'
+import { requireWritableTenant } from '@/auth/requireTenant'
 import { normalizeLayout } from '@/workspace/layout'
 import { loadWorkspaceDto } from '@/workspace/preview'
 
 /** POST /workspace/undo — swap the page back to its previous layout (one-level
  *  undo; pressing it again redoes, since the swap is symmetric). */
 export async function POST(req: NextRequest) {
-  const user = await getSessionUser(req.headers)
-  if (!user) return NextResponse.json({ ok: false, message: 'Please log in.' }, { status: 401 })
-
-  const tenantId = tenantIdOfUser(user)
-  if (!tenantId) return NextResponse.json({ ok: false, message: 'No site linked.' }, { status: 403 })
+  const guard = await requireWritableTenant(req.headers)
+  if (guard.response) return guard.response
+  const tenantId = guard.tenant!.tenantId
 
   let body: any
   try {
@@ -31,7 +29,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    await updateTenantPage(tenantId, page.id, { layout: prev, previousLayout: normalizeLayout(page) })
+    await updateTenantPage(tenantId, page.id, { layout: prev, previousLayout: normalizeLayout(page) }, guard.tenant!.operatorUserId)
     const workspace = await loadWorkspaceDto(tenantId, page.id)
     return NextResponse.json({ ok: true, workspace })
   } catch {

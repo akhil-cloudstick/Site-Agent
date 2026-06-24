@@ -26,6 +26,7 @@ export async function runContentEdit(
   request: string,
   imageDataUrl?: string,
   targetIndex?: number,
+  operatorUserId?: number,
 ): Promise<ContentEditResult> {
   const pages = await listTenantPages(tenantId, 1)
   if (pages.length === 0) return { ok: false, message: "There's no page to edit yet — nothing was changed." }
@@ -93,7 +94,7 @@ export async function runContentEdit(
   }
 
   try {
-    await updateTenantPage(tenantId, page.id, data)
+    await updateTenantPage(tenantId, page.id, data, operatorUserId)
   } catch {
     return { ok: false, message: "I couldn't apply that — nothing was changed." }
   }

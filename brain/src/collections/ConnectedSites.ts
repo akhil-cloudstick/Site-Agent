@@ -1,5 +1,7 @@
 import type { CollectionConfig } from 'payload'
 
+import { assertOperatorWriteAllowed } from '../lib/changeset/operatorWriteGuard'
+
 /**
  * ConnectedSites — an external website (built by the client) that SiteAgent edits
  * the CONTENT of and republishes. The site's design/templates live in the client's
@@ -15,6 +17,25 @@ import type { CollectionConfig } from 'payload'
 export const ConnectedSites: CollectionConfig = {
   slug: 'connectedSites',
   admin: { useAsTitle: 'name' },
+  hooks: {
+    // Deny-by-default backstop: connectedSites is NOT covered by stampActiveChangeSet
+    // (different collection), so guard operator writes here too (Codex R2 #6). Normal
+    // edits run as the service principal, so this is a no-op for them; it blocks a
+    // direct operator API write/delete with an arbitrary tenant.
+    beforeChange: [
+      ({ data, originalDoc, req }) => {
+        const tenantId = (originalDoc as any)?.tenant ?? (data as any)?.tenant
+        assertOperatorWriteAllowed(req, tenantId)
+        return data
+      },
+    ],
+    beforeDelete: [
+      async ({ req, id }) => {
+        const doc = await req.payload.findByID({ collection: 'connectedSites', id, overrideAccess: true, depth: 0 })
+        assertOperatorWriteAllowed(req, (doc as any)?.tenant)
+      },
+    ],
+  },
   fields: [
     { name: 'name', type: 'text', required: true },
     // The live web address the published site is served at.

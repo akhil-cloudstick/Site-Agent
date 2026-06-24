@@ -15,6 +15,7 @@ import { Changesets } from './collections/Changesets'
 import { Pages } from './collections/Pages'
 import { ConnectedSites } from './collections/ConnectedSites'
 import { Jobs } from './collections/Jobs'
+import { Settings } from './globals/Settings'
 import { getEnv } from './config/env'
 
 const env = getEnv()
@@ -28,8 +29,19 @@ export default buildConfig({
     importMap: {
       baseDir: path.resolve(dirname),
     },
+    components: {
+      // A "back to the operator dashboard" link at the top of Payload's nav.
+      beforeNavLinks: ['/components/BackToAdminLink#BackToAdminLink'],
+    },
+  },
+  // Payload's own admin UI moves to /admin/payload so the app can own /admin for the
+  // custom operator dashboard. Payload regenerates its internal admin/asset/redirect
+  // links from this value (the physical route folder is moved to match).
+  routes: {
+    admin: '/admin/payload',
   },
   collections: [Users, Media, Tenants, Changesets, Pages, ConnectedSites, Jobs],
+  globals: [Settings],
   // Expected access-control denials (403 "not allowed") are logged at ERROR with
   // a full stack by default — far too noisy. Drop them below the default visible
   // level so the console shows only genuine problems. Real (non-Forbidden) errors

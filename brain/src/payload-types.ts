@@ -97,8 +97,12 @@ export interface Config {
     defaultIDType: number;
   };
   fallbackLocale: null;
-  globals: {};
-  globalsSelect: {};
+  globals: {
+    settings: Setting;
+  };
+  globalsSelect: {
+    settings: SettingsSelect<false> | SettingsSelect<true>;
+  };
   locale: null;
   widgets: {
     collections: CollectionsWidget;
@@ -175,6 +179,10 @@ export interface Tenant {
   name: string;
   slug: string;
   status: 'provisioning' | 'active' | 'suspended' | 'failed';
+  /**
+   * Allow a platform operator to edit this site while impersonating.
+   */
+  allowOperatorEdit?: boolean | null;
   liveUrl?: string | null;
   githubRepo?: string | null;
   deployTargets?:
@@ -231,6 +239,7 @@ export interface Changeset {
   previewDeploymentId?: string | null;
   productionDeploymentId?: string | null;
   initiatedBy?: (number | null) | User;
+  impersonatedBy?: (number | null) | User;
   correlationId?: string | null;
   publishedAt?: string | null;
   updatedAt: string;
@@ -637,6 +646,7 @@ export interface TenantsSelect<T extends boolean = true> {
   name?: T;
   slug?: T;
   status?: T;
+  allowOperatorEdit?: T;
   liveUrl?: T;
   githubRepo?: T;
   deployTargets?: T;
@@ -656,6 +666,7 @@ export interface ChangesetsSelect<T extends boolean = true> {
   previewDeploymentId?: T;
   productionDeploymentId?: T;
   initiatedBy?: T;
+  impersonatedBy?: T;
   correlationId?: T;
   publishedAt?: T;
   updatedAt?: T;
@@ -878,6 +889,43 @@ export interface PayloadMigrationsSelect<T extends boolean = true> {
   batch?: T;
   updatedAt?: T;
   createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "settings".
+ */
+export interface Setting {
+  id: number;
+  aiProvider: 'openrouter';
+  /**
+   * Ordered model slugs; tried in order until one responds.
+   */
+  aiModels?:
+    | {
+        slug: string;
+        id?: string | null;
+      }[]
+    | null;
+  aiApiKeyCiphertext?: string | null;
+  updatedAt?: string | null;
+  createdAt?: string | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "settings_select".
+ */
+export interface SettingsSelect<T extends boolean = true> {
+  aiProvider?: T;
+  aiModels?:
+    | T
+    | {
+        slug?: T;
+        id?: T;
+      };
+  aiApiKeyCiphertext?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  globalType?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

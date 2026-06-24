@@ -1,16 +1,15 @@
 import { type NextRequest, NextResponse } from 'next/server'
 
 import { deleteTenantPage, listTenantPages } from '@/broker/adapter'
-import { getSessionUser, tenantIdOfUser } from '@/auth/session'
+import { requireReadableTenant, requireWritableTenant } from '@/auth/requireTenant'
 import { addTenantPage } from '@/workspace/create-page'
 import { loadWorkspaceDto } from '@/workspace/preview'
 
 /** GET /workspace/pages?pageId=N — load a specific page (used when switching pages). */
 export async function GET(req: NextRequest) {
-  const user = await getSessionUser(req.headers)
-  if (!user) return NextResponse.json({ ok: false, message: 'Please log in.' }, { status: 401 })
-  const tenantId = tenantIdOfUser(user)
-  if (!tenantId) return NextResponse.json({ ok: false, message: 'No site linked.' }, { status: 403 })
+  const guard = await requireReadableTenant(req.headers)
+  if (guard.response) return guard.response
+  const tenantId = guard.tenantId!
 
   const pageIdRaw = req.nextUrl.searchParams.get('pageId')
   const pageId = pageIdRaw ? Number(pageIdRaw) : undefined
@@ -20,13 +19,9 @@ export async function GET(req: NextRequest) {
 
 /** POST /workspace/pages — add a new page to the site (starts with a hero section). */
 export async function POST(req: NextRequest) {
-  const user = await getSessionUser(req.headers)
-  if (!user) return NextResponse.json({ ok: false, message: 'Please log in.' }, { status: 401 })
-
-  const tenantId = tenantIdOfUser(user)
-  if (!tenantId) {
-    return NextResponse.json({ ok: false, message: 'Your account is not linked to a site.' }, { status: 403 })
-  }
+  const guard = await requireWritableTenant(req.headers)
+  if (guard.response) return guard.response
+  const tenantId = guard.tenant!.tenantId
 
   let body: any
   try {
@@ -38,7 +33,7 @@ export async function POST(req: NextRequest) {
   const navLabel = typeof body?.navLabel === 'string' ? body.navLabel : undefined
 
   try {
-    const created = (await addTenantPage(tenantId, title, navLabel)) as any
+    const created = (await addTenantPage(tenantId, title, navLabel, guard.tenant!.operatorUserId)) as any
     const workspace = await loadWorkspaceDto(tenantId, created.id)
     return NextResponse.json({ ok: true, newPageId: created.id, workspace })
   } catch {
@@ -48,13 +43,9 @@ export async function POST(req: NextRequest) {
 
 /** DELETE /workspace/pages?pageId=N — remove a page (the Home page can't be deleted). */
 export async function DELETE(req: NextRequest) {
-  const user = await getSessionUser(req.headers)
-  if (!user) return NextResponse.json({ ok: false, message: 'Please log in.' }, { status: 401 })
-
-  const tenantId = tenantIdOfUser(user)
-  if (!tenantId) {
-    return NextResponse.json({ ok: false, message: 'Your account is not linked to a site.' }, { status: 403 })
-  }
+  const guard = await requireWritableTenant(req.headers)
+  if (guard.response) return guard.response
+  const tenantId = guard.tenant!.tenantId
 
   const pageId = Number(req.nextUrl.searchParams.get('pageId'))
   if (!pageId) return NextResponse.json({ ok: false, message: 'Bad request.' }, { status: 400 })
@@ -70,7 +61,7 @@ export async function DELETE(req: NextRequest) {
   }
 
   try {
-    await deleteTenantPage(tenantId, pageId)
+    await deleteTenantPage(tenantId, pageId, guard.tenant!.operatorUserId)
     // Fall back to the first remaining page (Home) after deletion.
     const remaining = pages.filter((p: any) => p.id !== pageId)
     const nextId = (remaining.find((p: any) => p.slug === 'home') ?? remaining[0])?.id

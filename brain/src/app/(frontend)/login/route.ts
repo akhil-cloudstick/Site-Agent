@@ -2,7 +2,9 @@ import { type NextRequest, NextResponse } from 'next/server'
 
 import { getBrokerClient } from '@/broker/payload-client'
 
-/** POST /workspace/login — logs a tenant in and sets the Payload session cookie. */
+/** POST /login — shared login for tenants and operators; sets the Payload session cookie.
+ *  Role-based redirect is decided by the page the client returns to (operator → /admin,
+ *  tenant → /workspace), never by this route. */
 export async function POST(req: NextRequest) {
   let body: any
   try {

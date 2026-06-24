@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 
+import { Drawer } from './Drawer'
+import { DrawerLauncher } from './DrawerLauncher'
 import { ProgressModal, type JobLogLine, type JobStatus } from './ProgressModal'
 import { Switch } from './WorkspaceClient'
 
@@ -36,14 +38,24 @@ export interface ConnectedSiteSummary {
   liveUrl: string | null
   pagePaths: string[]
   cloudflareProject: string
+  repo: string | null
 }
 
+/** Does this site come from a git repo (so a Git-pull / sync makes sense)? */
+const isRepoSite = (repo?: string | null) =>
+  !!repo && (/^https?:\/\//.test(repo) || repo.endsWith('.git') || repo.includes('github.com'))
+
 const inp: React.CSSProperties = { padding: '8px 10px', borderRadius: 6, border: '1px solid #ccc', fontSize: 13 }
+const drawerHead: React.CSSProperties = { padding: '0 0 2px', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.04em', color: '#999' }
+const note: React.CSSProperties = { fontSize: 11, color: '#888' }
 
 /**
  * Edit a CONNECTED site (a real, already-built website): multi-page preview, click /
  * chat to edit text & images, publish to the same URL. Content-only — no structural
  * controls. All edits go through Payload; the site's code is never touched.
+ *
+ * The left panel is the conversation; every site-lifecycle control (connect, publish,
+ * roll back, remove, Cloudflare project, git-pull) lives in the left off-canvas drawer.
  */
 export function ConnectedEditor({
   sites: initialSites,
@@ -51,18 +63,30 @@ export function ConnectedEditor({
   onConnected,
   onSelect,
   openConnectSignal = 0,
+  drawerOpen = false,
+  onCloseDrawer = () => {},
+  onCreate = () => {},
+  onRemoved,
+  canEdit = true,
+  profile,
 }: {
   sites: ConnectedSiteSummary[]
   activeId: number | null
   onConnected: (site: ConnectedSiteSummary) => void
   onSelect: (id: number) => void
   openConnectSignal?: number
+  drawerOpen?: boolean
+  onCloseDrawer?: () => void
+  onCreate?: () => void
+  onRemoved?: (id: number) => void
+  canEdit?: boolean
+  profile?: React.ReactNode
 }) {
   const [sites, setSites] = useState(initialSites)
   const [busy, setBusy] = useState(false)
   // A long operation (connect/publish/delete) shown in the progress modal. The modal
   // overlays + blocks the page; progress is polled from the server so it survives a refresh.
-  const [job, setJob] = useState<{ id: number; type: JobType; title: string; siteId?: number; name?: string; originUrl?: string; cloudflareProject?: string; rollback?: boolean } | null>(null)
+  const [job, setJob] = useState<{ id: number; type: JobType; title: string; siteId?: number; name?: string; originUrl?: string; cloudflareProject?: string; repo?: string | null; rollback?: boolean } | null>(null)
   const [jp, setJp] = useState<{ percent: number; status: JobStatus; logs: JobLogLine[]; error?: string | null; result?: any }>({ percent: 0, status: 'running', logs: [] })
   const jobHandled = useRef(false)
   const [confirmRemove, setConfirmRemove] = useState<{ id: number; name: string } | null>(null)
@@ -82,6 +106,8 @@ export function ConnectedEditor({
   const [refImage, setRefImage] = useState<File | null>(null) // reference image for the AI
   const [cfProject, setCfProject] = useState('') // editable Cloudflare project for the active site
   const [showSettings, setShowSettings] = useState(false)
+  const [savedNote, setSavedNote] = useState(false) // "Cloudflare saved ✓" inline note
+  const [gitNote, setGitNote] = useState(false) // "git pull coming soon" inline note
   const imgInputRef = useRef<HTMLInputElement>(null)
   const refInputRef = useRef<HTMLInputElement>(null)
   // Keep-alive preview: one iframe per VISITED page, kept mounted so switching back is
@@ -135,6 +161,8 @@ export function ConnectedEditor({
     setShownPath('')
     setCfProject(active?.cloudflareProject ?? '')
     setShowSettings(false)
+    setSavedNote(false)
+    setGitNote(false)
   }
   // Reset the preview load-cache when the active site changes (refs must be mutated
   // outside render). Stale entries are site-id-prefixed, so this is just housekeeping.
@@ -164,6 +192,7 @@ export function ConnectedEditor({
         }
         return
       }
+      if (!canEdit) return // operator view-only: ignore edit/AI events
       // "Edit with AI" on one item → ask what to change, route through chat with the
       // item's current text as context so the AI targets the right thing.
       const ai = (e.data as any)?.saAi
@@ -195,7 +224,7 @@ export function ConnectedEditor({
     }
     window.addEventListener('message', onMsg)
     return () => window.removeEventListener('message', onMsg)
-  }, [activeId, activePath])
+  }, [activeId, activePath, canEdit])
 
   // Apply a finished job to the UI. Only `done` mutates state + auto-closes; `error` /
   // `cancelled` leave the modal open so the user reads the message (then clicks Close).
@@ -203,7 +232,7 @@ export function ConnectedEditor({
     if (j.status !== 'done') return
     if (jb.type === 'connect' && jb.siteId) {
       const pagePaths = Array.isArray(j.result?.pagePaths) && j.result.pagePaths.length ? j.result.pagePaths : ['/']
-      const ns: ConnectedSiteSummary = { id: jb.siteId, name: jb.name || 'New site', originUrl: jb.originUrl || '', liveUrl: null, pagePaths, cloudflareProject: jb.cloudflareProject || '' }
+      const ns: ConnectedSiteSummary = { id: jb.siteId, name: jb.name || 'New site', originUrl: jb.originUrl || '', liveUrl: null, pagePaths, cloudflareProject: jb.cloudflareProject || '', repo: jb.repo ?? null }
       setSites((s) => (s.some((x) => x.id === ns.id) ? s.map((x) => (x.id === ns.id ? ns : x)) : [...s, ns]))
       onConnected(ns)
       setShowConnect(false)
@@ -213,6 +242,7 @@ export function ConnectedEditor({
       addMsg('agent', jb.rollback ? 'Rolled back and republished.' : 'Published — your site is live.')
     } else if (jb.type === 'delete' && jb.siteId) {
       setSites((s) => s.filter((x) => x.id !== jb.siteId))
+      onRemoved?.(jb.siteId)
       if (jb.siteId === activeId) onSelect(0)
     }
     setTimeout(() => setJob(null), 600) // let the 100% ✓ show briefly, then close
@@ -260,7 +290,7 @@ export function ConnectedEditor({
         if (!alive || !j) return
         const titles: Record<JobType, string> = { connect: 'Connecting…', publish: 'Publishing your site…', delete: 'Removing…' }
         const site = sites.find((s) => s.id === activeId)
-        startJobModal({ id: j.id, type: j.type, title: titles[j.type as JobType] ?? 'Working…', siteId: activeId, name: site?.name, originUrl: site?.originUrl ?? undefined, cloudflareProject: site?.cloudflareProject })
+        startJobModal({ id: j.id, type: j.type, title: titles[j.type as JobType] ?? 'Working…', siteId: activeId, name: site?.name, originUrl: site?.originUrl ?? undefined, cloudflareProject: site?.cloudflareProject, repo: site?.repo })
       } catch {
         /* ignore */
       }
@@ -292,6 +322,7 @@ export function ConnectedEditor({
 
   async function connect() {
     if ((!cUrl.trim() && !cSource.trim()) || busy || job) return
+    onCloseDrawer() // a job will take over with the progress modal
     setBusy(true)
     try {
       const res = await fetch('/workspace/connected/connect', {
@@ -302,10 +333,10 @@ export function ConnectedEditor({
       const data = await res.json()
       if (data.jobId) {
         // Slow folder/repo connect → track progress in the modal; the site is added on done.
-        startJobModal({ id: data.jobId, type: 'connect', title: `Connecting ${cName || cUrl || 'the site'}`, siteId: data.siteId, name: cName || cUrl || 'New site', originUrl: cUrl, cloudflareProject: cProject })
+        startJobModal({ id: data.jobId, type: 'connect', title: `Connecting ${cName || cUrl || 'the site'}`, siteId: data.siteId, name: cName || cUrl || 'New site', originUrl: cUrl, cloudflareProject: cProject, repo: cSource || null })
       } else if (data.ok) {
         // Fast URL-only connect completed synchronously.
-        const newSite: ConnectedSiteSummary = { id: data.siteId, name: cName || cUrl || 'New site', originUrl: cUrl, liveUrl: null, pagePaths: Array.isArray(data.pagePaths) && data.pagePaths.length ? data.pagePaths : ['/'], cloudflareProject: cProject }
+        const newSite: ConnectedSiteSummary = { id: data.siteId, name: cName || cUrl || 'New site', originUrl: cUrl, liveUrl: null, pagePaths: Array.isArray(data.pagePaths) && data.pagePaths.length ? data.pagePaths : ['/'], cloudflareProject: cProject, repo: cSource || null }
         setSites((s) => [...s, newSite])
         onConnected(newSite)
         setShowConnect(false)
@@ -381,11 +412,12 @@ export function ConnectedEditor({
   function handleLoad(p: string) {
     loadedRef.current.add(srcFor(p))
     if (p === activePath) setShownPath(p)
-    frameRefs.current[p]?.contentWindow?.postMessage({ saEditMode: editMode }, '*')
+    frameRefs.current[p]?.contentWindow?.postMessage({ saEditMode: canEdit && editMode }, '*')
   }
 
   async function publish(rollback = false) {
     if (!activeId || busy || job) return
+    onCloseDrawer() // the progress modal takes over
     setBusy(true)
     try {
       const res = await fetch('/workspace/connected/publish', {
@@ -412,12 +444,17 @@ export function ConnectedEditor({
       })
       if ((await res.json()).ok) {
         setSites((s) => s.map((x) => (x.id === activeId ? { ...x, cloudflareProject: cfProject } : x)))
-        addMsg('agent', `Cloudflare project saved${cfProject ? `: ${cfProject}` : ''}.`)
         setShowSettings(false)
+        setSavedNote(true) // inline note; drawer stays open
       }
     } finally {
       setBusy(false)
     }
+  }
+
+  // Git pull (sync from the repo) is not wired up yet — show a "coming soon" note.
+  function gitPull() {
+    setGitNote(true)
   }
 
   async function undo() {
@@ -446,6 +483,7 @@ export function ConnectedEditor({
     const r = confirmRemove
     setConfirmRemove(null)
     if (!r) return
+    onCloseDrawer() // the progress modal takes over
     setBusy(true)
     try {
       const res = await fetch('/workspace/connected/delete', {
@@ -476,66 +514,19 @@ export function ConnectedEditor({
 
   return (
     <div style={{ display: 'flex', height: '100%', fontFamily: 'system-ui, sans-serif', color: '#111' }}>
-      {/* Left panel */}
+      {/* Left panel — the conversation. Site controls live in the drawer (☰). */}
       <div style={{ width: 360, minWidth: 300, borderRight: '1px solid #e2e2e2', display: 'flex', flexDirection: 'column', background: '#fafafa' }}>
-        <div style={{ padding: 12, display: 'flex', gap: 6, flexWrap: 'wrap', borderBottom: '1px solid #eee' }}>
-          {sites.map((s) => {
-            const on = s.id === activeId
-            return (
-              <span key={s.id} style={{ display: 'inline-flex', alignItems: 'center', borderRadius: 6, border: '1px solid ' + (on ? '#2563eb' : '#ccc'), background: on ? '#2563eb' : '#fff', overflow: 'hidden' }}>
-                <button onClick={() => onSelect(s.id)} style={{ fontSize: 13, padding: '6px 10px', border: 'none', background: 'transparent', cursor: busy ? 'default' : 'pointer', color: on ? '#fff' : '#333' }}>{s.name}</button>
-                <button onClick={() => removeSite(s.id, s.name)} disabled={busy} title={`Remove “${s.name}”`} style={{ fontSize: 12, lineHeight: 1, padding: '6px 7px', border: 'none', borderLeft: '1px solid ' + (on ? 'rgba(255,255,255,0.4)' : '#e0e0e0'), background: 'transparent', cursor: busy ? 'default' : 'pointer', color: on ? '#fff' : '#999' }}>×</button>
-              </span>
-            )
-          })}
-          <button onClick={() => setShowConnect((v) => !v)} style={{ ...btn, borderStyle: 'dashed' }}>+ Connect a website</button>
-        </div>
-
-        {showConnect && (
-          <div style={{ padding: 14, borderBottom: '1px solid #eee', display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <input value={cName} onChange={(e) => setCName(e.target.value)} placeholder="Name (e.g. Acme)" style={inp} />
-            <input value={cSource} onChange={(e) => setCSource(e.target.value)} placeholder="GitHub repo URL, or a folder path on this machine" style={inp} />
-            <input value={cUrl} onChange={(e) => setCUrl(e.target.value)} placeholder="Live address (optional — leave blank if not deployed yet)" style={inp} />
-            <input value={cProject} onChange={(e) => setCProject(e.target.value)} placeholder="Cloudflare project (needed to publish)" style={inp} />
-            <button onClick={connect} disabled={busy} style={{ ...btn, background: '#2563eb', color: '#fff', borderColor: '#2563eb' }}>Connect</button>
-            <span style={{ fontSize: 11, color: '#888' }}>Give a GitHub repo (we clone + build it), or a built-site/repo folder on this machine. Not deployed yet? Leave the live address blank — Publish will create the Cloudflare site and fill it in.</span>
-          </div>
-        )}
-
-        {active && (
-          <div style={{ padding: '10px 14px', borderBottom: '1px solid #eee', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <button onClick={() => publish(false)} disabled={busy} style={{ ...btn, background: busy ? '#9ca3af' : '#16a34a', color: '#fff', border: 'none', fontWeight: 600 }}>Publish</button>
-            <button onClick={undo} disabled={busy} title="Undo the last edit" style={btn}>↶ Undo</button>
-            <button onClick={() => publish(true)} disabled={busy} title="Restore the previously published version" style={btn}>Roll back</button>
-            <button onClick={() => setShowSettings((v) => !v)} disabled={busy} title="Cloudflare settings" style={btn}>⚙</button>
-            {active.liveUrl && <a href={active.liveUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: '#16a34a' }}>View live ↗</a>}
-          </div>
-        )}
-
-        {active && (showSettings || !active.cloudflareProject) && (
-          <div style={{ padding: '10px 14px', borderBottom: '1px solid #eee', display: 'flex', flexDirection: 'column', gap: 6, background: '#fff' }}>
-            <span style={{ fontSize: 12, color: '#555' }}>Cloudflare project {active.cloudflareProject ? '' : '(needed to publish)'}</span>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <input value={cfProject} onChange={(e) => setCfProject(e.target.value)} placeholder="cloudflare-project-name" style={{ ...inp, flex: 1 }} />
-              <button onClick={saveSettings} disabled={busy} style={{ ...btn, background: '#2563eb', color: '#fff', borderColor: '#2563eb' }}>Save</button>
-            </div>
-          </div>
-        )}
-
-        {/* Live URL — pinned at the top of the chat once the site has been published. */}
-        {active?.liveUrl && (
-          <div style={{ padding: '8px 14px', borderBottom: '1px solid #eee', background: '#f0fdf4', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, minWidth: 0 }}>
-            <span style={{ color: '#16a34a', fontWeight: 600, whiteSpace: 'nowrap' }}>● Live</span>
-            <a href={active.liveUrl} target="_blank" rel="noreferrer" title={active.liveUrl} style={{ color: '#15803d', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {active.liveUrl.replace(/^https?:\/\//, '')} ↗
-            </a>
-          </div>
-        )}
-
         {/* Conversation (same bubble style as the builder) */}
         <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
           {messages.length === 0 && active && (
-            <p style={{ color: '#888', fontSize: 13 }}>With Edit mode on, click any text or image in the preview to change it — or describe a change below. Text &amp; images only.</p>
+            <p style={{ color: '#888', fontSize: 13 }}>
+              {canEdit
+                ? 'With Edit mode on, click any text or image in the preview to change it — or describe a change below. Text & images only.'
+                : 'Viewing as operator — read-only.'}
+            </p>
+          )}
+          {!active && (
+            <p style={{ color: '#888', fontSize: 13 }}>Open the menu (☰) to connect a website or reopen one from history.</p>
           )}
           {messages.map((m, i) =>
             m.text === SKELETON ? (
@@ -561,20 +552,20 @@ export function ConnectedEditor({
           )}
         </div>
 
-        {active && target && (
+        {active && canEdit && target && (
           <div style={{ padding: '8px 12px 0', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#1e40af' }}>
             <span>Editing &ldquo;<strong>{target.label}</strong>&rdquo; — your next message applies here</span>
             <button onClick={() => setTarget(null)} title="Clear" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#888' }}>✕</button>
           </div>
         )}
-        {active && refImage && (
+        {active && canEdit && refImage && (
           <div style={{ padding: '8px 12px 0', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#555' }}>
             <span>Reference image for the AI: <strong>{refImage.name || 'pasted image'}</strong></span>
             <button onClick={() => setRefImage(null)} title="Remove" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#888' }}>✕</button>
           </div>
         )}
 
-        {active && (
+        {active && canEdit && (
           <div style={{ padding: 12, borderTop: '1px solid #e2e2e2' }}>
             <input ref={refInputRef} type="file" accept="image/*" onChange={(e) => { setRefImage(e.target.files?.[0] ?? null); e.target.value = '' }} style={{ display: 'none' }} />
             <div style={{ border: '1px solid #ccc', borderRadius: 12, padding: 8, background: '#fff', display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -622,27 +613,28 @@ export function ConnectedEditor({
         )}
       </div>
 
-      {/* Preview — same chrome as the builder: page tabs + edit-mode toggle, then address bar */}
+      {/* Preview — page tabs + Undo + edit-mode toggle, then address bar */}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#fff' }}>
         {active ? (
           <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', padding: '8px 12px', borderBottom: '1px solid #eee' }}>
+            {/* One toolbar row: page tabs · live URL · Undo · Edit mode */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', padding: '7px 12px', borderBottom: '1px solid #eee' }}>
               {pages.map((p) => {
                 const on = p === activePath
                 return (
                   <button key={p} onClick={() => setActivePath(p)} disabled={busy} style={{ fontSize: 12, padding: '4px 10px', borderRadius: 6, border: '1px solid ' + (on ? '#2563eb' : '#ccc'), background: on ? '#2563eb' : '#fff', color: on ? '#fff' : '#333', cursor: busy ? 'default' : 'pointer' }}>{pageLabel(p)}</button>
                 )
               })}
-              <span style={{ marginLeft: 'auto' }}>
-                <Switch on={editMode} onChange={toggleEdit} label="Edit mode" />
+              <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
+                {active.liveUrl && (
+                  <a href={active.liveUrl} target="_blank" rel="noreferrer" title={active.liveUrl} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#16a34a', textDecoration: 'none', fontWeight: 600, maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span>● Live</span>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{active.liveUrl.replace(/^https?:\/\//, '')} ↗</span>
+                  </a>
+                )}
+                {canEdit && <button onClick={undo} disabled={busy} title="Undo the last edit in the preview" style={btn}>↶ Undo</button>}
+                {canEdit && <Switch on={editMode} onChange={toggleEdit} label="Edit mode" />}
               </span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderBottom: '1px solid #eee', background: '#f6f6f6' }}>
-              <span style={{ flex: 1, fontSize: 12, color: '#777', background: '#fff', border: '1px solid #e0e0e0', borderRadius: 14, padding: '4px 12px' }}>
-                {active.originUrl && !active.originUrl.startsWith('pending:') ? active.originUrl.replace(/^https?:\/\//, '') : 'yoursite.com'}
-                <strong style={{ color: '#111' }}>{activePath === '/' ? '/' : activePath}</strong>
-              </span>
-              <span style={{ fontSize: 11, color: '#aaa' }}>{editMode ? 'draft · click text to edit' : 'draft · preview'}</span>
             </div>
             <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
               {mounted.map((p) => {
@@ -670,6 +662,85 @@ export function ConnectedEditor({
 
       {/* Shimmer animation for the skeleton chat reply. */}
       <style>{`@keyframes saShimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}`}</style>
+
+      {/* The command drawer: launcher (New + History) + connect form + per-site actions. */}
+      <Drawer open={drawerOpen} onClose={onCloseDrawer} title="Workspace">
+        <DrawerLauncher
+          mode="connected"
+          history={sites}
+          activeConnectedId={activeId}
+          busy={busy || !!job}
+          canEdit={canEdit}
+          onCreate={onCreate}
+          onConnect={() => { setShowConnect(true); setSavedNote(false); setGitNote(false) }}
+          onOpenConnected={onSelect}
+        />
+
+        {canEdit && (
+          <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {showConnect && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={drawerHead}>Connect a website</div>
+                <input value={cName} onChange={(e) => setCName(e.target.value)} placeholder="Name (e.g. Acme)" style={inp} />
+                <input value={cSource} onChange={(e) => setCSource(e.target.value)} placeholder="GitHub repo URL, or a folder path on this machine" style={inp} />
+                <input value={cUrl} onChange={(e) => setCUrl(e.target.value)} placeholder="Live address (optional — leave blank if not deployed yet)" style={inp} />
+                <input value={cProject} onChange={(e) => setCProject(e.target.value)} placeholder="Cloudflare project (needed to publish)" style={inp} />
+                <button onClick={connect} disabled={busy} style={{ ...btn, background: '#2563eb', color: '#fff', borderColor: '#2563eb', fontWeight: 600 }}>Connect</button>
+                <span style={note}>Give a GitHub repo (we clone + build it), or a built-site/repo folder on this machine. Not deployed yet? Leave the live address blank — Publish will create the Cloudflare site and fill it in.</span>
+              </div>
+            )}
+
+            {active && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={drawerHead}>{active.name}</div>
+                {/* Each action on its own full-width row. */}
+                <button onClick={() => publish(false)} disabled={busy} style={{ ...btn, width: '100%', padding: '9px 12px', background: busy ? '#9ca3af' : '#16a34a', color: '#fff', border: 'none', fontWeight: 600 }}>Publish</button>
+                <button onClick={() => publish(true)} disabled={busy} title="Restore the previously published version" style={{ ...btn, width: '100%', padding: '9px 12px' }}>Roll back</button>
+                {isRepoSite(active.repo) && (
+                  <button onClick={gitPull} disabled={busy} title="Pull the latest from the connected repo" style={{ ...btn, width: '100%', padding: '9px 12px' }}>Git pull</button>
+                )}
+                {gitNote && <span style={note}>Repo sync (Git pull) is coming soon.</span>}
+
+                {/* Cloudflare project — click to expand a dropdown with the input prefilled. */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <button
+                    onClick={() => {
+                      const open = !showSettings
+                      if (open) setCfProject(active.cloudflareProject ?? '') // prefill with the saved name
+                      setShowSettings(open)
+                      setSavedNote(false)
+                    }}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, width: '100%', textAlign: 'left', fontSize: 13, padding: '9px 12px', borderRadius: 6, border: '1px solid #e0e0e0', background: '#fff', cursor: 'pointer', color: '#333' }}
+                  >
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      Cloudflare project{active.cloudflareProject ? ` · ${active.cloudflareProject}` : ''}
+                    </span>
+                    <span style={{ color: '#999' }}>{showSettings ? '▾' : '▸'}</span>
+                  </button>
+                  {savedNote && !showSettings && <span style={{ ...note, color: '#16a34a' }}>Saved ✓</span>}
+                  {!active.cloudflareProject && !showSettings && <span style={note}>Needed to publish.</span>}
+                  {showSettings && (
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <input value={cfProject} onChange={(e) => setCfProject(e.target.value)} placeholder="cloudflare-project-name" style={{ ...inp, flex: 1 }} />
+                      <button onClick={saveSettings} disabled={busy} style={{ ...btn, background: '#2563eb', color: '#fff', borderColor: '#2563eb' }}>{active.cloudflareProject ? 'Update' : 'Save'}</button>
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => removeSite(active.id, active.name)}
+                  disabled={busy}
+                  title={`Remove “${active.name}”`}
+                  style={{ ...btn, width: '100%', padding: '9px 12px', color: '#dc2626', borderColor: '#fecaca' }}
+                >
+                  Remove site
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+        {profile}
+      </Drawer>
 
       {/* Progress modal for connect / publish / delete (blurred page, % bar, live logs). */}
       {job && (

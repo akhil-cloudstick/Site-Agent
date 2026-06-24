@@ -10,7 +10,7 @@ export function slugifyPageTitle(s: string): string {
  * hero section. Shared by the "+ Add page" button route and the chat's
  * "add a new page X" command so both behave identically.
  */
-export async function addTenantPage(tenantId: number, title: string, navLabel?: string) {
+export async function addTenantPage(tenantId: number, title: string, navLabel?: string, operatorUserId?: number) {
   const cleanTitle = title.trim() || 'New Page'
   const pages = await listTenantPages(tenantId, 0)
   const used = new Set(pages.map((p: any) => p.slug).filter(Boolean))
@@ -26,5 +26,5 @@ export async function addTenantPage(tenantId: number, title: string, navLabel?: 
     navLabel: (navLabel && navLabel.trim()) || cleanTitle,
     navOrder: pages.length,
     layout: [{ blockType: 'hero', heading: cleanTitle, subheading: '' }],
-  })
+  }, operatorUserId)
 }

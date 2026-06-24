@@ -1,12 +1,15 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 
 /** When false, the preview renders read-only (no click-to-edit, no controls). */
 const EditModeContext = createContext(true)
 
 import type { CurrentPage, PageSummary, WorkspaceDto } from '@/workspace/types'
+
+import type { ConnectedSiteSummary } from './ConnectedEditor'
+import { Drawer } from './Drawer'
+import { DrawerLauncher } from './DrawerLauncher'
 
 interface Msg {
   role: 'you' | 'agent'
@@ -37,14 +40,39 @@ const GREETING: Msg = {
   text: 'Hi! Tell me a change in plain English — e.g. "change the hero heading to Summer Sale".',
 }
 
-export function WorkspaceClient({ userEmail, workspace: initial, initialLiveUrl }: { userEmail: string; workspace: WorkspaceDto; initialLiveUrl?: string | null }) {
-  const router = useRouter()
+export function WorkspaceClient({
+  workspace: initial,
+  initialLiveUrl,
+  drawerOpen = false,
+  onCloseDrawer = () => {},
+  canEdit = true,
+  mode = 'block',
+  history = [],
+  activeConnectedId = null,
+  onCreate = () => {},
+  onConnect = () => {},
+  onOpenConnected = () => {},
+  profile,
+}: {
+  workspace: WorkspaceDto
+  initialLiveUrl?: string | null
+  drawerOpen?: boolean
+  onCloseDrawer?: () => void
+  canEdit?: boolean
+  mode?: 'block' | 'connected'
+  history?: ConnectedSiteSummary[]
+  activeConnectedId?: number | null
+  onCreate?: () => void
+  onConnect?: () => void
+  onOpenConnected?: (id: number) => void
+  profile?: React.ReactNode
+}) {
   const [messages, setMessages] = useState<Msg[]>([GREETING])
   const [pages, setPages] = useState<PageSummary[]>(initial.pages)
   const [current, setCurrent] = useState<CurrentPage | null>(initial.current)
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
-  const [editMode, setEditMode] = useState(true)
+  const [editMode, setEditMode] = useState(canEdit) // view-only operators start (and stay) in preview
   const [liveUrl, setLiveUrl] = useState<string | null>(initialLiveUrl ?? null)
   const [publishing, setPublishing] = useState(false)
   // A themed confirm / prompt dialog (replaces the browser's window.confirm/prompt).
@@ -415,38 +443,38 @@ export function WorkspaceClient({ userEmail, workspace: initial, initialLiveUrl 
     )
   }
 
-  async function signOut() {
-    try {
-      await fetch('/workspace/logout', { method: 'POST' })
-    } catch {}
-    try {
-      sessionStorage.removeItem(CHAT_KEY)
-    } catch {}
-    router.refresh()
-  }
-
   return (
     <div style={{ display: 'flex', height: '100%', fontFamily: 'system-ui, sans-serif', color: '#111' }}>
-      {/* Chat */}
-      <div style={{ width: chatWidth, flex: 'none', display: 'flex', flexDirection: 'column', background: '#fafafa' }}>
-        <header style={{ padding: '10px 16px', borderBottom: '1px solid #e2e2e2', fontSize: 13, color: '#555', display: 'flex', alignItems: 'center', gap: 8, rowGap: 8, justifyContent: 'space-between', flexWrap: 'wrap' }}>
-          <span style={{ flex: '1 1 140px', minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            Signed in as <strong>{userEmail}</strong>
-          </span>
-          <span style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            {liveUrl && (
-              <a href={liveUrl} target="_blank" rel="noreferrer" title="Your published site" style={{ fontSize: 12, color: '#16a34a', textDecoration: 'none', whiteSpace: 'nowrap', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {liveUrl.replace(/^https?:\/\//, '')} ↗
-              </a>
-            )}
-            <button onClick={publish} disabled={busy || publishing} title="Make the current version live" style={{ fontSize: 12, padding: '5px 14px', borderRadius: 6, border: 'none', background: publishing ? '#9ca3af' : '#16a34a', color: '#fff', fontWeight: 600, cursor: busy || publishing ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
+      {/* The command drawer (☰): launcher (New + History) + Publish. */}
+      <Drawer open={drawerOpen} onClose={onCloseDrawer} title="Workspace">
+        <DrawerLauncher
+          mode={mode}
+          history={history}
+          activeConnectedId={activeConnectedId}
+          busy={publishing}
+          canEdit={canEdit}
+          onCreate={onCreate}
+          onConnect={onConnect}
+          onOpenConnected={onOpenConnected}
+        />
+        {canEdit && (
+          <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.04em', color: '#999' }}>Builder — my site</div>
+            <button
+              onClick={publish}
+              disabled={busy || publishing}
+              title="Make the current version live"
+              style={{ fontSize: 13, padding: '9px 14px', borderRadius: 6, border: 'none', background: publishing ? '#9ca3af' : '#16a34a', color: '#fff', fontWeight: 600, width: '100%', cursor: busy || publishing ? 'default' : 'pointer' }}
+            >
               {publishing ? 'Publishing…' : 'Publish'}
             </button>
-            <button onClick={signOut} style={{ fontSize: 12, padding: '4px 10px', borderRadius: 6, border: '1px solid #ccc', background: '#fff', cursor: 'pointer' }}>
-              Sign out
-            </button>
-          </span>
-        </header>
+          </div>
+        )}
+        {profile}
+      </Drawer>
+
+      {/* Chat */}
+      <div style={{ width: chatWidth, flex: 'none', display: 'flex', flexDirection: 'column', background: '#fafafa' }}>
         <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
           {messages.map((m, i) => (
             <div
@@ -491,6 +519,7 @@ export function WorkspaceClient({ userEmail, workspace: initial, initialLiveUrl 
             <button onClick={() => setTarget(null)} title="Clear target" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#888' }}>✕</button>
           </div>
         )}
+        {canEdit ? (
         <div style={{ padding: 12, borderTop: '1px solid #e2e2e2' }}>
           <input ref={fileInputRef} type="file" accept="image/*" onChange={uploadImage} style={{ display: 'none' }} />
           <input ref={refInputRef} type="file" accept="image/*" onChange={(e) => { setRefImage(e.target.files?.[0] ?? null); e.target.value = '' }} style={{ display: 'none' }} />
@@ -531,6 +560,11 @@ export function WorkspaceClient({ userEmail, workspace: initial, initialLiveUrl 
             </div>
           </div>
         </div>
+        ) : (
+          <div style={{ padding: 14, borderTop: '1px solid #e2e2e2', fontSize: 13, color: '#888' }}>
+            Viewing as operator — read-only. The tenant has not enabled operator editing.
+          </div>
+        )}
       </div>
 
       {/* Drag to resize the chat vs. preview split. */}
@@ -600,27 +634,26 @@ export function WorkspaceClient({ userEmail, workspace: initial, initialLiveUrl 
               + Add page
             </button>
           )}
-          {editMode && (
-            <button
-              onClick={undo}
-              disabled={busy || !current?.canUndo}
-              title="Undo the last change to this page"
-              style={{ fontSize: 12, padding: '4px 10px', borderRadius: 6, border: '1px solid #ccc', background: '#fff', color: current?.canUndo ? '#333' : '#bbb', cursor: busy || !current?.canUndo ? 'default' : 'pointer' }}
-            >
-              ↶ Undo
-            </button>
-          )}
-          {/* Edit-mode toggle: ON = editable CMS, OFF = clean preview */}
-          <span style={{ marginLeft: 'auto' }}>
-            <Switch on={editMode} onChange={() => setEditMode((v) => !v)} label="Edit mode" />
+          {/* live URL · Undo · Edit-mode toggle, right-aligned */}
+          <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
+            {liveUrl && (
+              <a href={liveUrl} target="_blank" rel="noreferrer" title={liveUrl} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#16a34a', textDecoration: 'none', fontWeight: 600, maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span>● Live</span>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{liveUrl.replace(/^https?:\/\//, '')} ↗</span>
+              </a>
+            )}
+            {editMode && (
+              <button
+                onClick={undo}
+                disabled={busy || !current?.canUndo}
+                title="Undo the last change to this page"
+                style={{ fontSize: 12, padding: '4px 10px', borderRadius: 6, border: '1px solid #ccc', background: '#fff', color: current?.canUndo ? '#333' : '#bbb', cursor: busy || !current?.canUndo ? 'default' : 'pointer' }}
+              >
+                ↶ Undo
+              </button>
+            )}
+            {canEdit && <Switch on={editMode} onChange={() => setEditMode((v) => !v)} label="Edit mode" />}
           </span>
-        </div>
-        {/* Address bar (the page's route) */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderBottom: '1px solid #eee', background: '#f6f6f6' }}>
-          <span style={{ flex: 1, fontSize: 12, color: '#777', background: '#fff', border: '1px solid #e0e0e0', borderRadius: 14, padding: '4px 12px' }}>
-            yoursite.com<strong style={{ color: '#111' }}>{current?.route ?? '/'}</strong>
-          </span>
-          <span style={{ fontSize: 11, color: '#aaa' }}>{editMode ? 'draft · click text to edit' : 'draft · preview'}</span>
         </div>
         {/* Only the rendered page scrolls — the switcher and address bar stay put. */}
         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
@@ -639,7 +672,7 @@ export function WorkspaceClient({ userEmail, workspace: initial, initialLiveUrl 
           </div>
         )}
         {current ? (
-          <EditModeContext.Provider value={editMode}>
+          <EditModeContext.Provider value={canEdit && editMode}>
           <div style={{ fontFamily: current.theme.font === 'serif' ? 'Georgia, "Times New Roman", serif' : 'system-ui, sans-serif' }}>
             {/* Site nav menu (shown once there's more than one page) */}
             {pages.length > 1 && (

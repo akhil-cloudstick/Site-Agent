@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 
 import { listTenantPages, updateTenantPage, uploadTenantMedia } from '@/broker/adapter'
-import { getSessionUser, tenantIdOfUser } from '@/auth/session'
+import { requireWritableTenant } from '@/auth/requireTenant'
 import { normalizeLayout, setImageForUpload } from '@/workspace/layout'
 import { loadWorkspaceDto } from '@/workspace/preview'
 
@@ -14,13 +14,9 @@ import { loadWorkspaceDto } from '@/workspace/preview'
  * Always returns the fresh workspace plus `undo` (the previous image at that path).
  */
 export async function POST(req: NextRequest) {
-  const user = await getSessionUser(req.headers)
-  if (!user) return NextResponse.json({ ok: false, message: 'Please log in.' }, { status: 401 })
-
-  const tenantId = tenantIdOfUser(user)
-  if (!tenantId) {
-    return NextResponse.json({ ok: false, message: 'Your account is not linked to a site.' }, { status: 403 })
-  }
+  const guard = await requireWritableTenant(req.headers)
+  if (guard.response) return guard.response
+  const tenantId = guard.tenant!.tenantId
 
   const contentType = req.headers.get('content-type') ?? ''
   let path: string | undefined

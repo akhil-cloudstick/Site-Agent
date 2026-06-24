@@ -36,7 +36,14 @@ export async function resolveServicePrincipal(payload: Payload, tenantId: number
   return principal
 }
 
-async function ensureActiveChangeSet(payload: Payload, tenantId: number) {
+// Coerce a relationship value (id | { id } | null) to a numeric id.
+function relId(value: unknown): number | undefined {
+  if (typeof value === 'number') return value
+  if (value && typeof value === 'object' && 'id' in value) return relId((value as { id: unknown }).id)
+  return undefined
+}
+
+async function ensureActiveChangeSet(payload: Payload, tenantId: number, operatorUserId?: number) {
   const found = await payload.find({
     collection: 'changesets',
     where: { and: [{ tenant: { equals: tenantId } }, { status: { equals: 'active' } }] },
@@ -44,10 +51,19 @@ async function ensureActiveChangeSet(payload: Payload, tenantId: number) {
     depth: 0,
     overrideAccess: true,
   })
-  if (found.docs[0]) return { changeSet: found.docs[0], created: false }
+  const existing = found.docs[0]
+  if (existing) {
+    // Attribute the operator who edited via impersonation (only when it changed).
+    if (operatorUserId && relId((existing as { impersonatedBy?: unknown }).impersonatedBy) !== operatorUserId) {
+      await payload
+        .update({ collection: 'changesets', id: existing.id, data: { impersonatedBy: operatorUserId }, overrideAccess: true })
+        .catch(() => {})
+    }
+    return { changeSet: existing, created: false }
+  }
   const changeSet = await payload.create({
     collection: 'changesets',
-    data: { tenant: tenantId, status: 'active', kind: 'content' },
+    data: { tenant: tenantId, status: 'active', kind: 'content', ...(operatorUserId ? { impersonatedBy: operatorUserId } : {}) },
     overrideAccess: true,
   })
   return { changeSet, created: true }
@@ -61,10 +77,11 @@ async function ensureActiveChangeSet(payload: Payload, tenantId: number) {
 export async function applyContentWrite<T>(
   tenantId: number,
   write: (payload: Payload, principal: ServicePrincipal) => Promise<T>,
+  operatorUserId?: number,
 ): Promise<T> {
   const payload = await getBrokerClient()
   const principal = await resolveServicePrincipal(payload, tenantId)
-  const { changeSet, created } = await ensureActiveChangeSet(payload, tenantId)
+  const { changeSet, created } = await ensureActiveChangeSet(payload, tenantId, operatorUserId)
 
   try {
     return await write(payload, principal)
@@ -106,27 +123,34 @@ export async function listTenantPages(tenantId: number, depth = 0) {
 export async function createTenantPage(
   tenantId: number,
   data: { title: string; slug: string; navLabel?: string; navOrder?: number; layout?: unknown[] },
+  operatorUserId?: number,
 ) {
-  return applyContentWrite(tenantId, (payload, principal) =>
-    payload.create({
-      collection: 'pages',
-      data: { ...data, tenant: tenantId } as any,
-      user: principal,
-      overrideAccess: false,
-      draft: true,
-    }),
+  return applyContentWrite(
+    tenantId,
+    (payload, principal) =>
+      payload.create({
+        collection: 'pages',
+        data: { ...data, tenant: tenantId } as any,
+        user: principal,
+        overrideAccess: false,
+        draft: true,
+      }),
+    operatorUserId,
   )
 }
 
 /** Delete one of a tenant's pages through the safe write path (auto-opens a ChangeSet). */
-export async function deleteTenantPage(tenantId: number, pageId: number) {
-  return applyContentWrite(tenantId, (payload, principal) =>
-    payload.delete({
-      collection: 'pages',
-      id: pageId,
-      user: principal,
-      overrideAccess: false,
-    }),
+export async function deleteTenantPage(tenantId: number, pageId: number, operatorUserId?: number) {
+  return applyContentWrite(
+    tenantId,
+    (payload, principal) =>
+      payload.delete({
+        collection: 'pages',
+        id: pageId,
+        user: principal,
+        overrideAccess: false,
+      }),
+    operatorUserId,
   )
 }
 
@@ -149,15 +173,18 @@ export async function uploadTenantMedia(
 }
 
 /** Update one of a tenant's pages through the safe write path (auto-opens a ChangeSet, draft). */
-export async function updateTenantPage(tenantId: number, pageId: number, data: Record<string, unknown>) {
-  return applyContentWrite(tenantId, (payload, principal) =>
-    payload.update({
-      collection: 'pages',
-      id: pageId,
-      data,
-      user: principal,
-      overrideAccess: false,
-      draft: true,
-    }),
+export async function updateTenantPage(tenantId: number, pageId: number, data: Record<string, unknown>, operatorUserId?: number) {
+  return applyContentWrite(
+    tenantId,
+    (payload, principal) =>
+      payload.update({
+        collection: 'pages',
+        id: pageId,
+        data,
+        user: principal,
+        overrideAccess: false,
+        draft: true,
+      }),
+    operatorUserId,
   )
 }

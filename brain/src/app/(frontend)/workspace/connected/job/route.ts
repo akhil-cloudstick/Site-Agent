@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server'
 
-import { getSessionUser, tenantIdOfUser } from '@/auth/session'
+import { requireReadableTenant } from '@/auth/requireTenant'
 import { findActiveJobForSite, getJob, reapStaleJobs } from '@/jobs/store'
 
 /**
@@ -10,10 +10,9 @@ import { findActiveJobForSite, getJob, reapStaleJobs } from '@/jobs/store'
  *                      after a page refresh), or { job: null }. Also reaps stale jobs.
  */
 export async function GET(req: NextRequest) {
-  const user = await getSessionUser(req.headers)
-  if (!user) return NextResponse.json({ ok: false, message: 'Please log in.' }, { status: 401 })
-  const tenantId = tenantIdOfUser(user)
-  if (!tenantId) return NextResponse.json({ ok: false, message: 'No site linked.' }, { status: 403 })
+  const guard = await requireReadableTenant(req.headers)
+  if (guard.response) return guard.response
+  const tenantId = guard.tenantId!
 
   const idParam = req.nextUrl.searchParams.get('id')
   const siteParam = req.nextUrl.searchParams.get('siteId')

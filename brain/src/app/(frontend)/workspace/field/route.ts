@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 
 import { listTenantPages, updateTenantPage } from '@/broker/adapter'
-import { getSessionUser, tenantIdOfUser } from '@/auth/session'
+import { requireWritableTenant } from '@/auth/requireTenant'
 import { normalizeLayout, setLayoutFieldPath } from '@/workspace/layout'
 import { loadWorkspaceDto } from '@/workspace/preview'
 
@@ -14,13 +14,9 @@ const isAllowedPath = (p: unknown): p is string => typeof p === 'string' && PATH
 
 /** POST /workspace/field — direct (no-AI) edit of one field inside the layout. */
 export async function POST(req: NextRequest) {
-  const user = await getSessionUser(req.headers)
-  if (!user) return NextResponse.json({ ok: false, message: 'Please log in.' }, { status: 401 })
-
-  const tenantId = tenantIdOfUser(user)
-  if (!tenantId) {
-    return NextResponse.json({ ok: false, message: 'Your account is not linked to a site.' }, { status: 403 })
-  }
+  const guard = await requireWritableTenant(req.headers)
+  if (guard.response) return guard.response
+  const tenantId = guard.tenant!.tenantId
 
   let body: any
   try {
@@ -43,7 +39,7 @@ export async function POST(req: NextRequest) {
   if (!layout) return NextResponse.json({ ok: false, message: 'That section no longer exists.' }, { status: 400 })
 
   try {
-    await updateTenantPage(tenantId, page.id, { layout, previousLayout: normalizeLayout(page) })
+    await updateTenantPage(tenantId, page.id, { layout, previousLayout: normalizeLayout(page) }, guard.tenant!.operatorUserId)
     const workspace = await loadWorkspaceDto(tenantId, page.id)
     return NextResponse.json({ ok: true, workspace })
   } catch {

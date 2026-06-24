@@ -2,7 +2,7 @@ import path from 'node:path'
 
 import { type NextRequest, NextResponse } from 'next/server'
 
-import { getSessionUser, tenantIdOfUser } from '@/auth/session'
+import { requireWritableTenant } from '@/auth/requireTenant'
 import { cloudflareConfigured, deployToCloudflare } from '@/publish/deploy-cloudflare'
 import { exportSite } from '@/publish/export-site'
 import { publishTenantPages, saveTenantLiveUrl } from '@/publish/publish'
@@ -10,11 +10,9 @@ import { publishTenantPages, saveTenantLiveUrl } from '@/publish/publish'
 /** POST /workspace/publish — freeze the current drafts as the published site,
  *  and (if Cloudflare is configured) deploy it to a real public URL. */
 export async function POST(req: NextRequest) {
-  const user = await getSessionUser(req.headers)
-  if (!user) return NextResponse.json({ ok: false, message: 'Please log in.' }, { status: 401 })
-
-  const tenantId = tenantIdOfUser(user)
-  if (!tenantId) return NextResponse.json({ ok: false, message: 'No site linked.' }, { status: 403 })
+  const guard = await requireWritableTenant(req.headers)
+  if (guard.response) return guard.response
+  const tenantId = guard.tenant!.tenantId
 
   try {
     const { count, slug } = await publishTenantPages(tenantId)

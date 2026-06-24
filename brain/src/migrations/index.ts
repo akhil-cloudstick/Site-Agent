@@ -20,6 +20,8 @@ import * as migration_20260622_094940_connected_source_html from './20260622_094
 import * as migration_20260622_114414_connected_whole_site from './20260622_114414_connected_whole_site';
 import * as migration_20260622_153507_connected_undo_stack from './20260622_153507_connected_undo_stack';
 import * as migration_20260623_101221_jobs from './20260623_101221_jobs';
+import * as migration_20260624_074100_admin_impersonation_settings from './20260624_074100_admin_impersonation_settings';
+import * as migration_20260624_113229_impersonation_attribution from './20260624_113229_impersonation_attribution';
 
 export const migrations = [
   {
@@ -130,6 +132,16 @@ export const migrations = [
   {
     up: migration_20260623_101221_jobs.up,
     down: migration_20260623_101221_jobs.down,
-    name: '20260623_101221_jobs'
+    name: '20260623_101221_jobs',
+  },
+  {
+    up: migration_20260624_074100_admin_impersonation_settings.up,
+    down: migration_20260624_074100_admin_impersonation_settings.down,
+    name: '20260624_074100_admin_impersonation_settings',
+  },
+  {
+    up: migration_20260624_113229_impersonation_attribution.up,
+    down: migration_20260624_113229_impersonation_attribution.down,
+    name: '20260624_113229_impersonation_attribution'
   },
 ];

@@ -3,7 +3,7 @@ import path from 'node:path'
 
 import { type NextRequest, NextResponse } from 'next/server'
 
-import { getSessionUser, tenantIdOfUser } from '@/auth/session'
+import { resolveEffectiveTenant } from '@/auth/session'
 import { applyContent } from '@/connected/html'
 import { getConnectedSite } from '@/connected/store'
 
@@ -39,9 +39,12 @@ const CONTENT_TYPES: Record<string, string> = {
  *    preview looks exactly like the real, fully-styled site.
  */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ siteId: string; path?: string[] }> }) {
-  const user = await getSessionUser(req.headers)
-  if (!user) return new NextResponse('Please log in.', { status: 401 })
-  const tenantId = tenantIdOfUser(user)
+  // Use the EFFECTIVE tenant so an operator impersonating a tenant can preview its
+  // connected site (read-only), not just the operator's own (none) — same seam as the
+  // workspace page.
+  const eff = await resolveEffectiveTenant(req.headers)
+  if (!eff.user) return new NextResponse('Please log in.', { status: 401 })
+  const tenantId = eff.tenantId
   if (!tenantId) return new NextResponse('No site linked.', { status: 403 })
 
   const { siteId, path: segs } = await params

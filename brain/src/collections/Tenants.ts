@@ -18,6 +18,16 @@ export const Tenants: CollectionConfig = {
       defaultValue: 'provisioning',
       options: ['provisioning', 'active', 'suspended', 'failed'],
     },
+    {
+      // Tenant-controlled gate: when true, an operator impersonating this tenant
+      // may EDIT (not just view) the workspace. Default false = operator is
+      // view-only. Only a real member of this tenant may flip it (the toggle route
+      // rejects impersonating operators) — Codex R1 #9 / R2 #8.
+      name: 'allowOperatorEdit',
+      type: 'checkbox',
+      defaultValue: false,
+      admin: { description: 'Allow a platform operator to edit this site while impersonating.' },
+    },
     // The published site's public URL (set on a successful Cloudflare publish).
     { name: 'liveUrl', type: 'text' },
     // Set later by real provisioning (Module 3); unused in slice 1.

@@ -1,6 +1,7 @@
 import { APIError, type CollectionBeforeValidateHook } from 'payload'
 
 import { isAllowedSystemPurpose } from './systemPurpose'
+import { assertOperatorWriteAllowed } from './operatorWriteGuard'
 
 /**
  * Forces every tenant-content write into the Tenant's active ChangeSet, or
@@ -40,11 +41,20 @@ function ownedTenantIds(user: any): number[] {
  * The multi-tenant plugin scopes reads but does not block a Local-API write that
  * supplies another tenant's id, so this hook is the hard guarantee: a non-operator
  * principal may only write content for a tenant it owns.
+ *
+ * Operators are DENY-BY-DEFAULT (Codex R1 #2/#3): the multi-tenant plugin would let
+ * an operator write any tenant, so an operator write is rejected unless it carries an
+ * edit-enabled impersonation context for that exact tenant (set only by our server
+ * write paths). Normal tenant edits run as the service principal, not an operator, so
+ * they take the branch below untouched.
  */
-function resolveTenantId(user: any, data: any): number | undefined {
+function resolveTenantId(req: any, data: any): number | undefined {
+  const user = req.user
   const docTenant = toId(data?.tenant)
-  // Operator (super-admin) legitimately selects which tenant to act on.
-  if (user.isOperator) return docTenant
+  if (user.isOperator) {
+    assertOperatorWriteAllowed(req, docTenant)
+    return docTenant
+  }
   const owned = ownedTenantIds(user)
   if (docTenant !== undefined && !owned.includes(docTenant)) {
     throw new APIError(
@@ -73,7 +83,7 @@ export const stampActiveChangeSet: CollectionBeforeValidateHook = async ({ data,
     throw new APIError('Edits must be made by an authenticated user within a ChangeSet.', 403)
   }
 
-  const tenantId = resolveTenantId(req.user, doc)
+  const tenantId = resolveTenantId(req, doc)
   if (tenantId === undefined) {
     throw new APIError('Could not determine which site this edit belongs to.', 403)
   }

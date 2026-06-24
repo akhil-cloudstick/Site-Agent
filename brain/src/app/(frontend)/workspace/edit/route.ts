@@ -2,20 +2,16 @@ import { type NextRequest, NextResponse } from 'next/server'
 
 import { runContentEdit } from '@/agent/content-agent'
 import { detectNewPageIntent } from '@/agent/intent'
-import { getSessionUser, tenantIdOfUser } from '@/auth/session'
+import { requireWritableTenant } from '@/auth/requireTenant'
 import { addTenantPage } from '@/workspace/create-page'
 import { loadWorkspaceDto } from '@/workspace/preview'
 
 /** POST /workspace/edit — the chat endpoint. Auth from the session cookie,
  *  tenant derived server-side, the edit applied through the broker/agent. */
 export async function POST(req: NextRequest) {
-  const user = await getSessionUser(req.headers)
-  if (!user) return NextResponse.json({ ok: false, message: 'Please log in.' }, { status: 401 })
-
-  const tenantId = tenantIdOfUser(user)
-  if (!tenantId) {
-    return NextResponse.json({ ok: false, message: 'Your account is not linked to a site.' }, { status: 403 })
-  }
+  const guard = await requireWritableTenant(req.headers)
+  if (guard.response) return guard.response
+  const tenantId = guard.tenant!.tenantId
 
   let form: FormData
   try {
@@ -48,7 +44,7 @@ export async function POST(req: NextRequest) {
     const pageIntent = detectNewPageIntent(message)
     if (pageIntent) {
       try {
-        const created = (await addTenantPage(tenantId, pageIntent.title)) as any
+        const created = (await addTenantPage(tenantId, pageIntent.title, undefined, guard.tenant!.operatorUserId)) as any
         const workspace = await loadWorkspaceDto(tenantId, created.id)
         return NextResponse.json({
           ok: true,
@@ -61,7 +57,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const result = await runContentEdit(tenantId, pageId, message, imageDataUrl, targetIndex)
+  const result = await runContentEdit(tenantId, pageId, message, imageDataUrl, targetIndex, guard.tenant!.operatorUserId)
   // Return the fresh workspace so the client updates without a full refresh.
   const workspace = result.ok ? await loadWorkspaceDto(tenantId, pageId) : undefined
   return NextResponse.json({ ...result, workspace })

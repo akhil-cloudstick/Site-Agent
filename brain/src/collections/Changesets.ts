@@ -36,6 +36,9 @@ export const Changesets: CollectionConfig = {
     { name: 'productionDeploymentId', type: 'text' },
     // The human initiator (audit only) — never the principal a write runs as.
     { name: 'initiatedBy', type: 'relationship', relationTo: 'users' },
+    // The operator who last edited this ChangeSet while impersonating the tenant (abuse
+    // traceability). The write itself still runs as the tenant's service principal.
+    { name: 'impersonatedBy', type: 'relationship', relationTo: 'users', admin: { readOnly: true } },
     { name: 'correlationId', type: 'text', index: true },
     { name: 'publishedAt', type: 'date' },
   ],

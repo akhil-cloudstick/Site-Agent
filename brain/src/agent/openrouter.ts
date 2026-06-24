@@ -1,5 +1,4 @@
-import { getEnv } from '../config/env'
-import { MODEL_CONFIG } from './model'
+import { getAiApiKey, getModelConfig } from './aiSettings'
 
 /**
  * Minimal OpenRouter chat client (OpenAI-compatible). Tries the configured
@@ -26,11 +25,13 @@ export async function chat(
   messages: ChatMessage[],
   opts: { json?: boolean } = {},
 ): Promise<CompletionResult> {
-  const apiKey = getEnv().openRouterApiKey
-  if (!apiKey) throw new Error('OPENROUTER_API_KEY is not set — add it to brain/.env')
+  // Key + models come from the DB-backed settings global (env fallback). getAiApiKey
+  // throws a clear message if unset / undecryptable (fail-closed).
+  const apiKey = await getAiApiKey()
+  const { models } = await getModelConfig()
 
   const errors: string[] = []
-  for (const model of MODEL_CONFIG.models) {
+  for (const model of models) {
     try {
       const res = await fetch(OPENROUTER_URL, {
         method: 'POST',

@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-06-24
+
+**`02:30 PM`** — admin UI polish
+- **Sidebar** nav (Tenants · Settings) are now proper buttons with an active highlight; the **Log out** button is visible at the bottom of the sidebar (it was previously hidden in a dropdown that opened off-screen).
+- **Tenants list + per-tenant detail** are centered on the page. The detail page now lists **builder and connected sites in one table** (with a Type badge); the tenant's published address stays as the "Live" link at the top.
+- **Settings** centered and reordered (Provider → API key → Models). Models are now chosen from a **"+ Add model" dropdown** populated with the provider's **real available models** (fetched live from OpenRouter) — search and click to add; no free-text slug typing.
+- **Round-trip to Payload** — added a **"← Back to SiteAgent admin"** link inside Payload's nav, so you can return to `/admin` from the CMS (the link out already existed).
+- **Fixed:** an operator impersonating a tenant saw **"No site linked."** in a connected-site preview while the page tabs showed. The preview server (`/connected/<id>/…`) resolved the tenant from the operator's own session instead of the impersonated one — now uses the effective tenant, so the preview renders correctly under impersonation.
+
+**`01:30 PM`**
+- **Real operator workflow: admin dashboard, tenant onboarding, and "enter a tenant's site".** Big one, plan-hardened first (grilled for intent, then stress-tested by a second model, OpenAI Codex, over two adversarial rounds — 25 + 11 findings, all addressed; see `PLAN.md` / `PLAN-REVIEW-LOG.md`).
+  - **Routes restructured.** `localhost:3000/` is now the **single login** (tenants *and* the operator) — after sign-in it sends operators to **`/admin`** and tenants to **`/workspace`**. Payload's own CMS moved out of the way to **`/admin/payload`**. Login/logout are now shared at `/login` and `/logout`.
+  - **`/admin` — a professional, light operator dashboard.** Sidebar (Tenants · Settings). **Tenants list** with live usage (members, connected sites, published, running jobs, edit-access state) + top-line totals; **Add tenant** from the UI (creates the tenant, its first login, machine identity, an active change-set and a starter page — all-or-nothing, no half-made tenants); a **per-tenant detail page** with full usage; and an **AI Settings** page to set the agent's **API key (stored encrypted) and model list** without touching `.env`.
+  - **Admin can drop into any tenant's workspace.** "Enter" opens that tenant's `/workspace` as the operator — **view-only by default**. The tenant controls a **"Admin can edit"** toggle (in their profile menu); only then can the operator edit. A banner shows the impersonation state, and **the server enforces it** (view-only operators are blocked from every edit/publish path, not just in the UI).
+  - **Profile menu + themed dropdowns.** Every workspace/admin dropdown now uses the project theme (a shared `Menu`); the new profile icon holds Log out, the tenant's "Admin can edit" toggle, or an operator's "Back to admin".
+  - **Security model hardened (the load-bearing bit).** Operator content writes are now **deny-by-default** — an operator can only write a tenant's content through a valid, edit-enabled impersonation; the impersonation cookie is re-validated every request (operator session + tenant exists + active) and cleared on logout; the AI key is AES-256-GCM encrypted, never returned to any client, and fails closed if it can't be decrypted.
+  - Needs a one-time DB migration (`20260624_074100_admin_impersonation_settings`) for the new tenant flag + settings store.
+
+**`10:15 AM`**
+- **Operator admin panel (Phase 1).** Added an operator-only dashboard at **`/workspace/operator`** — a cross-tenant overview for the platform operator: every **tenant** with its **connected sites** (name, source, page count, live URL, status), plus **member count**, **running jobs**, and tenant status; and top-line **totals** (tenants · connected sites · published · active jobs). Gated on `isOperator`; reads across all tenants via the broker (operator scope, `overrideAccess`). Discoverable via an **"Operator ↗"** link in the workspace top bar (shown only to operators). Read-only v1 — tenant actions (suspend / billing / provisioning) and usage history come in the later admin phases. Code: `src/operator/dashboard.ts`, `app/(frontend)/workspace/operator/{page,OperatorClient}.tsx`.
+- Saved the phased roadmap to **`docs/phases.md`** (Phase 1 operator + hosting → Phase 2 connected-sites finish → Phase 3 production safety → Phase 4 polish).
+
 ## 2026-06-23
 
 **`06:30 PM`**
