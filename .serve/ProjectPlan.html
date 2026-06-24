@@ -231,13 +231,15 @@
   .cl-head{display:flex;flex-direction:column;gap:3px}
   .cl-head .clt{font-size:15px;font-weight:700;letter-spacing:.2px}
   .cl-head .cls{font-size:11px;color:var(--faint)}
-  .cl-list{display:flex;flex-direction:column;gap:12px}
+  .cl-list{display:flex;flex-direction:column;gap:22px}
+  .cl-day{display:flex;flex-direction:column;gap:10px}
+  .cl-date-head{font-size:13px;font-weight:700;color:#d5dde5;letter-spacing:.3px;padding-bottom:5px;border-bottom:1px solid var(--line2)}
   .cl-entry{border:1px solid var(--line);border-radius:10px;background:var(--panel2);padding:13px 14px;transition:border-color .15s}
   .cl-entry:hover{border-color:var(--line2)}
-  .cl-entry .cl-when{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:9px}
-  .cl-date{font-size:13px;font-weight:700;color:#d5dde5}
-  .cl-time{font-size:10.5px;padding:2px 9px;border-radius:20px;border:1px solid #274a7a;background:#13243a;color:#9ec5ff;
+  .cl-entry-head{display:flex;gap:9px;align-items:baseline;flex-wrap:wrap;margin-bottom:9px}
+  .cl-time{flex:none;font-size:10.5px;padding:2px 9px;border-radius:20px;border:1px solid #274a7a;background:#13243a;color:#9ec5ff;
     font-weight:600;letter-spacing:.3px;font-variant-numeric:tabular-nums}
+  .cl-title{font-size:12.5px;font-weight:650;color:#e9eef3;line-height:1.4}
   .cl-items{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
   .cl-items li{position:relative;padding-left:15px;font-size:12.5px;line-height:1.55;color:#c2ccd6}
   .cl-items li::before{content:"";position:absolute;left:2px;top:8px;width:5px;height:5px;border-radius:50%;background:var(--accent);opacity:.7}
@@ -1239,7 +1241,8 @@ function renderWaves(){
 
 /* ============================ CHANGELOG (read-only, right rail) ============================
    Fetches docs/CHANGELOG.md (served by server.js at api/changelog), parses each
-   timestamped group into a block, and renders them latest-first (file order kept).
+   timestamped group, then renders GROUPED BY DATE (one header per day) with the
+   time-groups nested under it, latest-first (file order kept).
    Display only — never touches task status/progress. No server → rail stays hidden. */
 function clEscape(s){ return s.replace(/[&<>]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
 function clInline(s){
@@ -1252,8 +1255,9 @@ function parseChangelog(md){
   md.split(/\r?\n/).forEach(line=>{
     let m;
     if((m=line.match(/^##\s+(.+?)\s*$/))){ date=m[1]; cur=null; return; }
-    if((m=line.match(/^\*\*\s*`?\s*(.+?)\s*`?\s*\*\*\s*$/))){           // **`11:00 AM`** time header
-      cur={ date, time:m[1], items:[] }; entries.push(cur); return;
+    if((m=line.match(/^\*\*\s*`?\s*([^`*]+?)\s*`?\s*\*\*\s*(.*)$/))){    // **`11:00 AM`** [— optional title]
+      const title=(m[2]||"").replace(/^\s*[—–-]\s*/,"").trim();
+      cur={ date, time:m[1].trim(), title, items:[] }; entries.push(cur); return;
     }
     if((m=line.match(/^[-*]\s+(.+?)\s*$/))){                            // - bullet
       if(!cur){ cur={ date, time:"", items:[] }; entries.push(cur); }
@@ -1268,15 +1272,25 @@ function renderChangelog(entries){
     const p=document.createElement("div"); p.className="cl-empty"; p.textContent="No changelog entries yet.";
     list.appendChild(p); return;
   }
+  // Group by date (one header per day), then nest each time-group under it.
+  let lastDate=null, day=null;
   entries.forEach(e=>{
+    if(e.date!==lastDate){
+      lastDate=e.date;
+      day=document.createElement("section"); day.className="cl-day";
+      const h=document.createElement("div"); h.className="cl-date-head"; h.textContent=e.date; day.appendChild(h);
+      list.appendChild(day);
+    }
     const box=document.createElement("div"); box.className="cl-entry";
-    const when=document.createElement("div"); when.className="cl-when";
-    const d=document.createElement("span"); d.className="cl-date"; d.textContent=e.date; when.appendChild(d);
-    if(e.time){ const t=document.createElement("span"); t.className="cl-time"; t.textContent=e.time; when.appendChild(t); }
-    box.appendChild(when);
+    if(e.time||e.title){
+      const head=document.createElement("div"); head.className="cl-entry-head";
+      if(e.time){ const t=document.createElement("span"); t.className="cl-time"; t.textContent=e.time; head.appendChild(t); }
+      if(e.title){ const ti=document.createElement("span"); ti.className="cl-title"; ti.innerHTML=clInline(e.title); head.appendChild(ti); }
+      box.appendChild(head);
+    }
     const ul=document.createElement("ul"); ul.className="cl-items";
     e.items.forEach(it=>{ const li=document.createElement("li"); li.innerHTML=clInline(it); ul.appendChild(li); });
-    box.appendChild(ul); list.appendChild(box);
+    box.appendChild(ul); day.appendChild(box);
   });
 }
 async function changelogInit(){
