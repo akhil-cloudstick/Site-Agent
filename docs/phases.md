@@ -1,27 +1,71 @@
 # SiteAgent — Pending Work, Phased
 
-_The ordered plan for what's left. Phase 1 first. Cross-referenced with `../.serve/ProjectPlan.html` module IDs (m1–m14) and `PENDING.md`._
+_All remaining work in two sections: **LOCAL** (build + test on your machine first) and **DEPLOY** (after local is done). Tick a box as you finish each task. Task IDs in `()` map to `../.serve/ProjectPlan.html`._
 
-## Phase 1 — Operator + run it for real
-1. **Operator admin panel** (m11) — ✅ **v2 done (2026-06-24).** Real dashboard at `/admin` (Payload moved to `/admin/payload`): tenants list + usage, add-tenant, per-tenant detail, AI settings (encrypted key + model picker), and **operator impersonation** (enter a tenant's workspace, view-only unless the tenant allows edit — server-enforced). Single login at `/`. Still owed: tenant suspend/billing/roles, secrets server-side, github-app, automated guard tests.
-2. **Host the platform for real** (`m1-host-warm` + **R2 media** m10) — deploy the editor itself to a warm paid host + managed Postgres (localhost-only today) so real clients can use it.
-3. **Block-builder UX polish** (m13) — loading states, publish/discard UX, mobile/responsive.
-
-## Phase 2 — Finish the live product (Connected Sites)
-4. **Connected UI polish** — ✅ mostly done (progress bar + cancel + ⋮ badge). Remaining: cosmetic top-bar + chat-section layout; verify the Cancel kill-tree on a live clone/build/deploy.
-5. **Custom domains** — publish to the client's real domain, not just `*.pages.dev`.
-6. **Connected structural edits** (`m14-structural`) — add/remove pages & sections, design/layout changes.
-
-## Phase 3 — Production safety & scale
-7. **Bulletproof publishing** (m9 saga) + **DB hardening** (m2 — audit log, edit locks, indexes).
-8. **Automated provisioning** (m3) — one-click new-client setup (repo + Cloudflare + login).
-9. **Real preview infrastructure** (m8) — replaces the current in-app preview.
-10. **Monitoring / observability** (m12) — logs + alerts on publish/deploy failures.
-
-## Phase 4 — Smaller owed items
-11. **AI token streaming** (`m6-sse`) — true Thinking → Applying → Updating states.
-12. **More section types** (gallery, etc.) for the block builder.
-13. **Structural agent + component registry** (m6/m7) — the engine behind structural edits.
+> Rule of thumb: if the Brain does it by calling an API (Cloudflare, R2, GitHub), it's **local**. Only the Brain physically running on a server is **deploy**.
 
 ---
-**Status:** Phase 1 #1 (Operator admin panel) ✅ v2 done — dashboard + tenant onboarding + impersonation + AI settings. Next: **Phase 1 #2 — Host the platform for real** (deploy the Brain off localhost + R2 media). _(Reminder: run `pnpm payload migrate` before the new admin features work.)_
+
+## 🖥️ SECTION 1 — Complete on LOCAL (your machine first)
+
+### Phase 1 — Finish what's half-done
+- [ ] Finish **Publish UX** in the block builder (`m13-publish-ux`)
+- [ ] Finish **Discard UX** in the block builder (`m13-discard-ux`)
+- [ ] **Verify Cancel** actually kills a live clone / build / deploy
+- [ ] **Verify AI chat key** works from `/admin → Settings` on builder + connected sites
+
+### Phase 2 — Structural editing (biggest feature)
+- [ ] **Add / remove / reorder pages** (`m14-structural`)
+- [ ] **Add / remove / reorder sections** (`m14-structural`)
+- [ ] **Gallery + more section types**
+- [ ] **`data-sa` marker robustness** so connected-site edits survive a redesign
+
+### Phase 3 — Custom domains
+- [ ] **Attach a custom domain** to the site's Cloudflare project
+- [ ] **Show the DNS record** for the client to add + **verify Active/Pending**
+
+### Phase 4 — Admin / operator completeness
+- [ ] **Suspend / resume** a tenant
+- [ ] **Remove** a tenant (with cleanup of its sites/jobs)
+- [ ] **Set a plan label**
+- [ ] **Usage history (light)** — edits / publishes / storage over time
+
+### Phase 5 — Polish
+- [ ] **Token streaming** — Thinking → Applying → Updating (`m6-sse`)
+- [ ] **Mobile / responsive** layout (`m13-responsive`)
+
+### Phase 6 — Pre-deploy prep (built locally, required before deploy)
+- [ ] **Move media to R2 / cloud storage** (`m10`) — builder's local-disk images break on a server
+- [ ] **Secrets via config seam everywhere** (`m11-secrets` — code side)
+- [ ] **Switch IDs to UUID** (optional, do before real data exists)
+
+### Phase 7 — Optional / advanced (only if you want the hardened version — still all local)
+- [ ] Publish saga with rollback/compensation (`m9-*`)
+- [ ] Automated provisioning — repo + Cloudflare + login (`m3-*`)
+- [ ] Audit log + edit-leases + DB hardening (`m2-*`)
+- [ ] Section primitive registry + CI checks (`m7-*`)
+- [ ] SSR-on-Workers real preview (`m8-*`)
+- [ ] Observability / correlation IDs (`m12-*`)
+
+---
+
+## ☁️ SECTION 2 — Needs DEPLOY (after local is done)
+
+### Phase 8 — Go live
+- [ ] **Deploy the Brain** to a warm paid host — Railway / Fly / Render (`m1-host-warm`)
+- [ ] **Managed Postgres** (Neon paid, no idle pause)
+- [ ] **Run migrations** on the host
+- [ ] **Load secrets** into the host's secret store (`m11-secrets` — final step)
+- [ ] **Wire R2 + Cloudflare creds** in production
+- [ ] **Domain for the platform itself**
+
+### Phase 9 — Post-deploy verify & ops
+- [ ] **Confirm R2 serves media** correctly (no local disk)
+- [ ] **Confirm no cold-start / DB-pause** problems
+- [ ] **CI pipeline** — lint / typecheck / test (`m1-ci`)
+- [ ] **Write the host doc** — "$0 tier is dev-only" (`m1-host-doc`)
+- [ ] **Monitoring / alerts** on publish/deploy failures (`m12`)
+
+### Later (after launch)
+- [ ] GitHub App per-repo tokens (`m11-github-app`)
+- [ ] Billing + team roles (`m11-roles-open`)
