@@ -2,6 +2,20 @@
 
 ## 2026-06-24
 
+**`07:05 PM`** — workspace command drawer + cleaner top bar
+- **One left off-canvas drawer** (opened by the profile avatar, top-left) is now the workspace command center: **New** (Connect a website · Create from scratch) and **History** (the builder + every connected site), and — for the active connected site — **Publish · Roll back · Git pull · Cloudflare project · Remove site**. The account menu (email · "Admin can edit" toggle / "Back to admin" · Log out) sits at the foot of the drawer. The old `New ▾` dropdown and the inline button bars are gone.
+- **All drawer items share one row style** (icon + label, hover + active highlight) in the project's light theme — Publish reads green, Remove red, everything else neutral; same size/shape throughout.
+- **Connect a website is now its own modal** (the same themed dialog as Publish/Remove) with Cancel · Connect, instead of a form crammed in the drawer; errors show inline. It auto-opens for a brand-new tenant with nothing connected.
+- **Cloudflare project** is a click-to-expand row (prefilled with the saved name; "Update" when one exists, "Save" when not).
+- **Top bar** now shows the **live URL + Edit-mode toggle** on the right (Undo stays by the preview); the signed-in email is no longer duplicated there (it lives in the drawer's account menu). The drawer opens/closes smoothly (GPU transform, no backdrop-blur jank).
+- **Git pull** appears only for repo-based connected sites and shows a "coming soon" note (the real re-clone/rebuild is still deferred).
+
+**`06:10 PM`** — tenant-impersonation hardening: the owed follow-ups are done
+- **View-only is now enforced in the UI too, not just the server.** A view-only operator (a tenant that hasn't enabled "Admin can edit") no longer sees dead edit controls inside the **block builder or the connected editor** — the chat box, click-to-edit, Edit-mode toggle, and every write action are hidden (the server already 403'd them; now the UI matches).
+- **Operator edits are attributed.** When a tenant lets an operator edit, the operator's id is now recorded as `impersonatedBy` on the active ChangeSet (the edit still runs as the tenant's service principal). New migration `20260624_113229_impersonation_attribution`.
+- **Guard tests written.** Unit tests cover the deny-by-default operator-write rule (incl. "operator clears the cookie → direct POST still denied" and the edit-enabled-context-allows case), the per-route write-gate branches, and a regression net asserting **all 15 mutation routes** carry the guard (+ the connected-site direct-write guard). 53 tests green.
+- **Cleanup:** deleted the now-dead `OperatorClient.tsx` (the panel moved to `/admin`); applied the pending admin/impersonation migration.
+
 **`02:30 PM`** — admin UI polish
 - **Sidebar** nav (Tenants · Settings) are now proper buttons with an active highlight; the **Log out** button is visible at the bottom of the sidebar (it was previously hidden in a dropdown that opened off-screen).
 - **Tenants list + per-tenant detail** are centered on the page. The detail page now lists **builder and connected sites in one table** (with a Type badge); the tenant's published address stays as the "Live" link at the top.

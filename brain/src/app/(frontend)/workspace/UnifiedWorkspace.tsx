@@ -4,7 +4,7 @@ import { useState } from 'react'
 
 import { ConnectedEditor, type ConnectedSiteSummary } from './ConnectedEditor'
 import { DrawerProfile } from './DrawerProfile'
-import { WorkspaceClient } from './WorkspaceClient'
+import { Switch, WorkspaceClient } from './WorkspaceClient'
 
 export interface Impersonation {
   tenantName: string
@@ -46,14 +46,17 @@ export function UnifiedWorkspace({
       : connectedSites.length === 0
         ? 'connected'
         : 'block'
-  const isFirstRun = !initialConnectedId && initialView !== 'builder' && connectedSites.length === 0
 
   const [mode, setMode] = useState<'block' | 'connected'>(initialMode)
-  const [drawerOpen, setDrawerOpen] = useState(isFirstRun)
+  // First-run (nothing connected) pops the Connect modal from the editor itself, so the
+  // drawer always starts closed.
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const [allowEdit, setAllowEdit] = useState(Boolean(initialAllowOperatorEdit))
   const [history, setHistory] = useState(connectedSites)
   const [activeConnectedId, setActiveConnectedId] = useState<number | null>(initialConnectedId ?? connectedSites[0]?.id ?? null)
   const [connectSignal, setConnectSignal] = useState(0)
+  // Live URL + Edit-mode toggle for the top bar — reported up by the active editor.
+  const [topBar, setTopBar] = useState<{ liveUrl: string | null; editMode: boolean; onToggleEdit: () => void; showToggle: boolean }>({ liveUrl: null, editMode: true, onToggleEdit: () => {}, showToggle: false })
 
   // Operators impersonating view-only can't edit — hide the drawer's write actions (the
   // routes 403 too; this is just cosmetic). Normal tenants always can.
@@ -108,10 +111,11 @@ export function UnifiedWorkspace({
   const closeDrawer = () => setDrawerOpen(false)
 
   function openConnect() {
-    // Switch to the connected editor and pop its connect form — keep the drawer OPEN (the
-    // form lives inside it).
+    // Switch to the connected editor and pop its Connect modal (the editor reacts to the
+    // signal). Close the drawer — the modal stands on its own.
     setMode('connected')
     setConnectSignal((n) => n + 1)
+    setDrawerOpen(false)
   }
   function createNew() {
     setMode('block')
@@ -151,8 +155,20 @@ export function UnifiedWorkspace({
           </span>
         </button>
         <span style={{ fontSize: 13, color: '#555' }}>{label}</span>
-        <span style={{ marginLeft: 'auto', display: 'flex', gap: 12, alignItems: 'center', fontSize: 12, color: '#888' }}>
-          <span style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{userEmail}</span>
+        <span style={{ marginLeft: 'auto', display: 'flex', gap: 16, alignItems: 'center', fontSize: 12, color: '#888' }}>
+          {topBar.liveUrl && (
+            <a
+              href={topBar.liveUrl}
+              target="_blank"
+              rel="noreferrer"
+              title={topBar.liveUrl}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: '#16a34a', textDecoration: 'none', fontWeight: 600, maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+            >
+              <span>● Live</span>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{topBar.liveUrl.replace(/^https?:\/\//, '')} ↗</span>
+            </a>
+          )}
+          {topBar.showToggle && <Switch on={topBar.editMode} onChange={topBar.onToggleEdit} label="Edit mode" />}
         </span>
       </div>
 
@@ -201,6 +217,7 @@ export function UnifiedWorkspace({
             onConnect={openConnect}
             onOpenConnected={openConnected}
             profile={drawerProfile}
+            onTopBar={setTopBar}
           />
         ) : (
           <ConnectedEditor
@@ -215,6 +232,7 @@ export function UnifiedWorkspace({
             onRemoved={onRemoved}
             canEdit={canEdit}
             profile={drawerProfile}
+            onTopBar={setTopBar}
           />
         )}
       </div>

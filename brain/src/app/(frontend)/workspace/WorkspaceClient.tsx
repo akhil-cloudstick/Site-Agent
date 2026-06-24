@@ -10,6 +10,7 @@ import type { CurrentPage, PageSummary, WorkspaceDto } from '@/workspace/types'
 import type { ConnectedSiteSummary } from './ConnectedEditor'
 import { Drawer } from './Drawer'
 import { DrawerLauncher } from './DrawerLauncher'
+import { DrawerIcons, DrawerRow, drawerSectionHead } from './DrawerRow'
 
 interface Msg {
   role: 'you' | 'agent'
@@ -53,6 +54,7 @@ export function WorkspaceClient({
   onConnect = () => {},
   onOpenConnected = () => {},
   profile,
+  onTopBar,
 }: {
   workspace: WorkspaceDto
   initialLiveUrl?: string | null
@@ -66,6 +68,7 @@ export function WorkspaceClient({
   onConnect?: () => void
   onOpenConnected?: (id: number) => void
   profile?: React.ReactNode
+  onTopBar?: (c: { liveUrl: string | null; editMode: boolean; onToggleEdit: () => void; showToggle: boolean }) => void
 }) {
   const [messages, setMessages] = useState<Msg[]>([GREETING])
   const [pages, setPages] = useState<PageSummary[]>(initial.pages)
@@ -344,6 +347,13 @@ export function WorkspaceClient({
     setModal(null)
   }
 
+  // Surface the live URL + Edit-mode toggle to the workspace top bar.
+  useEffect(() => {
+    onTopBar?.({ liveUrl, editMode, onToggleEdit: () => setEditMode((v) => !v), showToggle: canEdit })
+    return () => onTopBar?.({ liveUrl: null, editMode: true, onToggleEdit: () => {}, showToggle: false })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveUrl, editMode, canEdit])
+
   async function publish() {
     if (busy || publishing) return
     setPublishing(true)
@@ -458,16 +468,15 @@ export function WorkspaceClient({
           onOpenConnected={onOpenConnected}
         />
         {canEdit && (
-          <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.04em', color: '#999' }}>Builder — my site</div>
-            <button
-              onClick={publish}
+          <div style={{ paddingBottom: 6 }}>
+            <div style={drawerSectionHead}>Builder — my site</div>
+            <DrawerRow
+              icon={DrawerIcons.publish}
+              label={publishing ? 'Publishing…' : 'Publish'}
+              accent="success"
               disabled={busy || publishing}
-              title="Make the current version live"
-              style={{ fontSize: 13, padding: '9px 14px', borderRadius: 6, border: 'none', background: publishing ? '#9ca3af' : '#16a34a', color: '#fff', fontWeight: 600, width: '100%', cursor: busy || publishing ? 'default' : 'pointer' }}
-            >
-              {publishing ? 'Publishing…' : 'Publish'}
-            </button>
+              onClick={publish}
+            />
           </div>
         )}
         {profile}
@@ -634,15 +643,9 @@ export function WorkspaceClient({
               + Add page
             </button>
           )}
-          {/* live URL · Undo · Edit-mode toggle, right-aligned */}
-          <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
-            {liveUrl && (
-              <a href={liveUrl} target="_blank" rel="noreferrer" title={liveUrl} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#16a34a', textDecoration: 'none', fontWeight: 600, maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                <span>● Live</span>
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{liveUrl.replace(/^https?:\/\//, '')} ↗</span>
-              </a>
-            )}
-            {editMode && (
+          {/* Undo, right-aligned. (Live URL + Edit-mode toggle live in the top bar.) */}
+          {editMode && (
+            <span style={{ marginLeft: 'auto' }}>
               <button
                 onClick={undo}
                 disabled={busy || !current?.canUndo}
@@ -651,9 +654,8 @@ export function WorkspaceClient({
               >
                 ↶ Undo
               </button>
-            )}
-            {canEdit && <Switch on={editMode} onChange={() => setEditMode((v) => !v)} label="Edit mode" />}
-          </span>
+            </span>
+          )}
         </div>
         {/* Only the rendered page scrolls — the switcher and address bar stay put. */}
         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>

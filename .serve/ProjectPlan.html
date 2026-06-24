@@ -29,6 +29,10 @@
     Added m8-inbrain-preview (slice-1 substitute for m8-ssr-worker) and
     overrode m13-workspace dep → m8-inbrain-preview (not m8-ssr-worker) so
     the graph matches the vertical-slice-first build. 89→90 tasks.
+  - v5 (2026-06-22): Module 14 — Connected Sites (edit an external static site).
+  - v6 (2026-06-24): admin dashboard + server-enforced tenant impersonation +
+    DB-backed encrypted AI settings (m11-impersonation, m11-ai-settings) and the
+    workspace command drawer (m13-drawer).
 
   Source precedence: Architecture.md + ADR 0001 (Path B: Node+Postgres)
   are authoritative for v1 and override stale AgentPlan.md / Path-A wording.
@@ -376,8 +380,8 @@
 "use strict";
 /* ============================ CONTENT (immutable source of truth) ============================ */
 const CONTENT = {
-  contentVersion: 5,
-  generatedFrom: "2026-06-22",
+  contentVersion: 6,
+  generatedFrom: "2026-06-24",
   modules: [
     { id:"m1", title:"Foundation & Infra", subs:[
       { title:"Brain app skeleton", tasks:[
@@ -518,11 +522,13 @@ const CONTENT = {
     { id:"m11", title:"Auth & Identity", subs:[
       { title:"Tenant auth (Contract E)", tasks:[
         { id:"m11-tenant-auth", t:"Payload user auth, multi-tenant scoped — one login gates the Chat+Preview UI and the Tenant-scoped admin", p:"P1", crit:true, ref:"Architecture.md §E" },
-        { id:"m11-operator-admin", t:"Operator admin user", p:"P2", ref:"Architecture.md §E / UserFlow Flow 0" }
+        { id:"m11-operator-admin", t:"Operator admin user", p:"P2", ref:"Architecture.md §E / UserFlow Flow 0" },
+        { id:"m11-impersonation", t:"Operator impersonation of a tenant workspace — view-only by default, editable only via the tenant's 'Admin can edit' toggle; server-enforced deny-by-default operator writes, cookie re-validated every request, impersonatedBy attribution on the ChangeSet", p:"P2", crit:true, ref:"PLAN.md (admin/impersonation)" }
       ]},
       { title:"Machine identity & secrets", tasks:[
         { id:"m11-github-app", t:"GitHub App identity with per-repo installation tokens; never on the production branch protection bypass list", p:"P2", crit:true, ref:"Architecture.md §3 / §D" },
         { id:"m11-secrets", t:"All GitHub/Cloudflare/Payload secrets held server-side in the Brain only (never client-exposed)", p:"P1", crit:true, ref:"Architecture.md §E" },
+        { id:"m11-ai-settings", t:"DB-backed AI settings global — provider + model list + API key (AES-256-GCM encrypted, never client-serialized, fail-closed), operator-only; replaces the env-hardcoded model/key", p:"P2", ref:"PLAN.md (admin settings)" },
         { id:"m11-roles-open", t:"OPEN: Tenant roles / multi-user teams / who-can-publish / billing are unspecified — decide before real teams", p:"P3", inferred:"Architecture §E and AgentPlan both list roles/billing as open; surfaced as an explicit decision task rather than invented.", ref:"Architecture.md §Risks / AgentPlan.md open items" }
       ]}
     ]},
@@ -540,7 +546,8 @@ const CONTENT = {
         { id:"m13-workspace", t:"Chat-left / preview-right workspace + mode toggle + bottom draft-status bar; starter site so the preview is never blank", p:"P1", ref:"UserFlow Flow 1" },
         { id:"m13-mode-toggle", t:"Explicit 'Edit content' / 'Change layout' toggle — no auto-classification", p:"P1", ref:"UserFlow Flow 4 / AgentPlan.md §6" },
         { id:"m13-state-model", t:"Visible customer state model (Published / Draft pending / Reviewing / Publishing / Paused-recovery); ChangeSet/branch/merge/saga vocab never shown", p:"P1", ref:"UserFlow §Visible state model" },
-        { id:"m13-micro-states", t:"First-class loading micro-states: Agent Thinking/Applying/Updating, Preview Refreshing, editor Saving/Saved", p:"P2", ref:"UserFlow §micro-states" }
+        { id:"m13-micro-states", t:"First-class loading micro-states: Agent Thinking/Applying/Updating, Preview Refreshing, editor Saving/Saved", p:"P2", ref:"UserFlow §micro-states" },
+        { id:"m13-drawer", t:"Left off-canvas command drawer — launcher (Connect / Create / History) + per-site actions (Publish / Roll back / Git pull / Cloudflare project / Remove) + account menu; Connect-a-website modal; uniform rows; live URL + Edit-mode toggle in the top bar", p:"P2", ref:"CHANGELOG 2026-06-24" }
       ]},
       { title:"Edit interactions", tasks:[
         { id:"m13-direct-editor", t:"Embedded element-scoped direct editor panel with Cancel/Save — not a navigation into the full Payload admin", p:"P2", ref:"UserFlow Flow 3" },
