@@ -133,17 +133,20 @@ export async function publishConnectedSite(tenantId: number, siteId: number, ctx
   ctx.reporter(75, 'Uploading to Cloudflare…')
   const { url: deployedUrl } = await deployConnectedSite(project, dir, ctx.registerChild)
   ctx.reporter(95, 'Finishing up…')
-  // The live URL is the site's own address if it has one (custom domain), else the
-  // Cloudflare URL we just deployed to (e.g. a brand-new, not-previously-deployed site).
-  const originUrl = typeof site.originUrl === 'string' ? site.originUrl.trim() : ''
-  const url = originUrl && !originUrl.startsWith('pending:') ? originUrl : deployedUrl
+  // The live URL is the site's own address ONLY if it's a real custom domain. A pending
+  // placeholder OR a Cloudflare *.pages.dev URL (which Cloudflare assigns and may suffix,
+  // e.g. <project>-c2r.pages.dev) is never canonical — always take it from the actual
+  // deploy, so a previously-guessed/stale pages.dev URL self-heals on the next publish.
+  const rawOrigin = typeof site.originUrl === 'string' ? site.originUrl.trim() : ''
+  const customDomain = rawOrigin && !rawOrigin.startsWith('pending:') && !/\.pages\.dev/i.test(rawOrigin) ? rawOrigin : ''
+  const url = customDomain || deployedUrl
 
   // Success → rotate snapshots for rollback + record the live URL (+ fill it in if this
   // was the very first deploy of a site that wasn't live yet).
   await updateConnectedSite(tenantId, siteId, {
     previousContent: site.publishedContent ?? {},
     publishedContent: draft,
-    originUrl: originUrl && !originUrl.startsWith('pending:') ? originUrl : deployedUrl,
+    originUrl: customDomain || deployedUrl,
     liveUrl: url,
   })
   return { url }

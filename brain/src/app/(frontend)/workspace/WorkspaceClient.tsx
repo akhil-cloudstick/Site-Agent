@@ -42,6 +42,7 @@ const GREETING: Msg = {
 }
 
 export function WorkspaceClient({
+  tenantId,
   workspace: initial,
   initialLiveUrl,
   drawerOpen = false,
@@ -56,6 +57,7 @@ export function WorkspaceClient({
   profile,
   onTopBar,
 }: {
+  tenantId: number
   workspace: WorkspaceDto
   initialLiveUrl?: string | null
   drawerOpen?: boolean
@@ -165,22 +167,28 @@ export function WorkspaceClient({
     setCurrent(ws.current)
   }
 
+  // Per-tenant chat key in localStorage — so the builder conversation survives a reload
+  // AND logout/login (sessionStorage was per-tab and cleared on tab close), without leaking
+  // one tenant's chat to the next on a shared browser.
+  const chatStoreKey = `${CHAT_KEY}.${tenantId}`
+
   // Restore chat history on mount (survives a full page refresh). Intentionally
   // sets state after mount — the hydration-safe way to load browser-only state.
   useEffect(() => {
     try {
-      const saved = sessionStorage.getItem(CHAT_KEY)
+      const saved = localStorage.getItem(chatStoreKey)
       // eslint-disable-next-line react-hooks/set-state-in-effect
       if (saved) setMessages(JSON.parse(saved))
     } catch {}
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatStoreKey])
 
   // Persist chat history whenever it changes.
   useEffect(() => {
     try {
-      sessionStorage.setItem(CHAT_KEY, JSON.stringify(messages))
+      localStorage.setItem(chatStoreKey, JSON.stringify(messages))
     } catch {}
-  }, [messages])
+  }, [messages, chatStoreKey])
 
   async function send() {
     const text = input.trim()

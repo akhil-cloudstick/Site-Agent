@@ -57,6 +57,8 @@ const WRITE_ROUTES = [
   'edit', 'field', 'pages', 'publish', 'upload', 'structure', 'undo',
   'connected/connect', 'connected/publish', 'connected/delete', 'connected/edit',
   'connected/undo', 'connected/settings', 'connected/chat', 'connected/cancel',
+  // Phase 2 — connected-site structural editing
+  'connected/structure', 'connected/pages', 'connected/generate', 'connected/insert', 'connected/nav', 'connected/element', 'connected/item',
 ]
 
 describe('every mutation route carries a write guard', () => {

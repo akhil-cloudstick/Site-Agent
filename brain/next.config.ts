@@ -8,6 +8,9 @@ const dirname = path.dirname(__filename)
 
 const nextConfig: NextConfig = {
   devIndicators: false,
+  // `sharp` is a native module — never bundle it (it must be require()'d at runtime).
+  // Without this, Turbopack (`dev:fast`) fails with "Cannot find module 'sharp-<hash>'".
+  serverExternalPackages: ['sharp'],
   images: {
     localPatterns: [
       {
@@ -40,4 +43,8 @@ const nextConfig: NextConfig = {
   },
 }
 
-export default withPayload(nextConfig, { devBundleServerPackages: false })
+// `devBundleServerPackages: true` lets Payload's server packages be bundled rather than
+// kept external — required for Turbopack (`dev:fast`) on Next 16, which otherwise fails to
+// resolve the externalized `payload` / `@payloadcms/db-postgres` modules. The only package
+// that must stay external is the native `sharp` (see `serverExternalPackages` above).
+export default withPayload(nextConfig, { devBundleServerPackages: true })

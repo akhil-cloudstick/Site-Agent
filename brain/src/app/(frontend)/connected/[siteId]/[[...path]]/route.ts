@@ -59,10 +59,26 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ site
   // workspace turns edit mode on via postMessage — so toggling never reloads) + rewrite
   // asset links so the preview is fully styled under this prefix.
   const html = (site.sourceHtml ?? {})[pathname]
-  if (html) {
+  if (typeof html === 'string' && html.trim()) {
     const draft = (site.draftContent ?? {})[pathname] ?? {}
-    const rendered = applyContent(html, draft, { editor: true, assetPrefix: prefix })
+    // Never blank the preview: if injecting the editor throws (a parser edge case on some
+    // page), serve the page itself rather than a 500 — the home page especially must render.
+    let rendered: string
+    try {
+      rendered = applyContent(html, draft, { editor: true, assetPrefix: prefix })
+      if (!rendered || !rendered.trim()) rendered = html
+    } catch {
+      rendered = html
+    }
     return new NextResponse(rendered, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } })
+  }
+  // A known page whose stored HTML is empty/missing → say so (don't fall through to a bare
+  // 404 that reads as "site broken"); the rest of the site still works.
+  if (parts.length === 0 || (site.pagePaths ?? []).includes(pathname)) {
+    return new NextResponse(
+      `<!doctype html><meta charset="utf-8"><body style="font:14px system-ui;color:#666;padding:32px">This page has no saved content yet. Try re-connecting the site, or edit another page.</body>`,
+      { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } },
+    )
   }
 
   // Otherwise serve a static asset from the site's managed folder.

@@ -11,14 +11,14 @@ _All remaining work in two sections: **LOCAL** (build + test on your machine fir
 ### Phase 1 — Finish what's half-done
 - [ ] Finish **Publish UX** in the block builder (`m13-publish-ux`)
 - [ ] Finish **Discard UX** in the block builder (`m13-discard-ux`)
-- [ ] **Verify Cancel** actually kills a live clone / build / deploy
-- [ ] **Verify AI chat key** works from `/admin → Settings` on builder + connected sites
+- [x] **Verify Cancel** actually kills a live clone / build / deploy _(verified 2026-06-25)_
+- [x] **Verify AI chat key** works from `/admin → Settings` on builder + connected sites _(verified 2026-06-25)_
 
-### Phase 2 — Structural editing (biggest feature)
-- [ ] **Add / remove / reorder pages** (`m14-structural`)
-- [ ] **Add / remove / reorder sections** (`m14-structural`)
-- [ ] **Gallery + more section types**
-- [ ] **`data-sa` marker robustness** so connected-site edits survive a redesign
+### Phase 2 — Structural editing (biggest feature)  _(connected sites — done 2026-06-25)_
+- [x] **Add / remove / reorder pages** (`m14-structural`) _(2026-06-25)_
+- [x] **Add / remove / reorder sections** (`m14-structural`) — sections + repeated items (cards, nav links, buttons): reorder · duplicate · remove · AI-edit _(2026-06-25)_
+- [ ] **Gallery + more section types** — the **builder's** typed gallery/FAQ/pricing/logos blocks (separate, lower-priority). On a **connected** site these can already be added via the AI "+ Add section".
+- [x] **`data-sa` marker robustness** so connected-site edits survive a redesign — fingerprint re-matching (`remapDraft`) + server-stamped `data-sa-link`/`data-sa-item` _(2026-06-25)_
 
 ### Phase 3 — Custom domains
 - [ ] **Attach a custom domain** to the site's Cloudflare project

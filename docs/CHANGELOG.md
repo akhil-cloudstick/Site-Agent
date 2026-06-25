@@ -1,5 +1,52 @@
 # Changelog
 
+## 2026-06-25
+
+**`10:10 PM`** — ✅ Phase 2 (Structural editing) is complete for connected sites — `m14-structural` marked done
+- **What this milestone covers, end-to-end on an external connected site:**
+  - **Pages** — add / remove / reorder.
+  - **Sections** (the big bands) — add / remove / move up-down / replace.
+  - **Items** (repeated cards, nav links, buttons) — reorder (any direction) / duplicate / remove, all from the one ⋮ menu, scoped to what you hover.
+  - **AI** — generate a new section or page, or edit an existing **section / page / single card** with AI, styled to the site, preview-before-commit, undoable; reproduce a supplied reference.
+  - **Deterministic** — add/remove/redirect buttons & nav links.
+  - **Resilience** — every change keeps prior text/image edits intact (fingerprint re-matching) and is undoable; chat messages name what changed and where; the preview loads with a spinner and reliably reveals (no blank home page).
+- **Tracker:** `.serve` state → `m14-structural` = **done** (rev 41); `phases.md` Phase 2 boxes ticked.
+- **Still open (separate / lower-priority, moved to PENDING):** the builder's typed gallery/FAQ/pricing/logos blocks; an end-to-end scripted verify runner for the connected structural path; minor polish (swap an inline-`<svg>` icon, add a link to a bare unlinked image).
+
+**`09:55 PM`** — preview no longer flashes blank-white on reload (and the home page can't get "stuck")
+- **Loading spinner while the first preview paints.** On reload/hard-reload the preview iframe used to be blank-white for a few seconds; now a "Loading preview…" spinner shows until it's ready (only on the initial paint — during a page switch the previous page stays visible, so no spinner flicker).
+- **Auto-reveal fallback so it never hangs.** The iframe's `onLoad` sometimes doesn't fire on the very first load after the app mounts (a cached/raced iframe) — which is why the **home page** (the default page on reload) could stay blank until you switched tabs. The editor now polls the iframe's ready state and reveals it as soon as it's done, with a hard reveal after ~3.5s no matter what. No more switching pages to "unstick" it.
+- **The preview render can't blank a page anymore.** The connected preview route now serves the page itself if injecting the editor ever throws (instead of a 500), and shows a clear "no saved content" note rather than a bare 404; the new item-detection stamping is wrapped so it can't break a render. (If a specific edit still leaves the home page broken after this, it points to data corruption we'll chase with a repro.)
+
+**`09:30 PM`** — connected editor: menus are now scoped to what you hover (+ Edit-with-AI on a card)
+- **Each ⋮ menu now matches what it's on.** Hovering a card's **text** shows only text options (Edit text · Edit with AI); the **card itself** shows card options (Edit with AI · Move · Duplicate · Remove this); an **image** shows Change image. No more "move/duplicate the card" appearing on the text inside it — those belong to the card. The menu targets the most specific thing under the pointer (text/image → that editable; its surrounding card → the card).
+- **"Edit with AI" on a single card/item.** A card, icon, or nav item now has **Edit with AI** in its menu — type a change and just that one item is regenerated (styled to the site, preview-before-commit, undoable). New `mode:'item'` in the generate route + `replace-item` in insert, backed by `getItemHtml`/`replaceItemHtml` (+ shared-nav variants) in `structure.ts` and `replaceItemToPage` in the store. 3 new tests (128 total green).
+- **Icons & logos got their options.** Repeated icons (e.g. social icons) now expose **Set link · Add after · Move · Duplicate · Remove · Edit with AI** from their badge (an icon link is treated as the item). Image logos get **Change image** (+ Set link / reorder when they apply). (Inline-`<svg>` "change icon" and adding a link to a bare, unlinked image are still TODO.)
+
+**`09:07 PM`** — Phase 1 verifications closed (Cancel kill + AI key from Settings)
+- **Cancel actually kills a live job.** Verified that hitting **Cancel** mid clone / build / deploy tears down the whole child process tree (win32 `taskkill /T /F` + posix process-group) — no orphaned `git`/`npm`/`wrangler` left running, and the workspace cleans up. Was previously implemented-but-unverified.
+- **AI chat key works from `/admin → Settings`.** Verified the operator-set API key + model list (DB-backed, AES-256-GCM encrypted, no `.env` edit) powers the AI chat agent end-to-end on **both** the block builder and connected sites. Without a key, click-to-edit still works.
+- Tracker: `m11-ai-settings` marked **done**; both items checked off in `phases.md` Phase 1 and the matching owed lines in `PENDING.md` closed. (Still owed: multi-node resumable jobs — single-node only today.)
+
+**`08:15 PM`** — connected sites: reorder/duplicate/remove repeated items (cards, nav links, buttons)
+- **New "item" controls, in the existing ⋮ menu.** Repeated things on a connected page — the cards in a blog/feature grid, the links/buttons in a nav, the tiers in a pricing row — are now detected as **items**, and their **Move / Duplicate / Remove** actions appear inside the **same single ⋮ dropdown** you already use to edit a card's image/text (no second badge, no second menu). Reorder labels follow the live layout — **Move left/right** when items sit in a row, **up/down** when stacked. This is the connected-site answer to "how do I add more blog cards / reorder nav buttons horizontally or vertically".
+- **One badge, one dropdown — period.** A card/block now opens its menu **only from the ⋮ badge**; clicking the card body or a link no longer pops a second, different menu. That single menu carries everything that applies to what you're on — **Edit text · Edit with AI · Change image · Set link · Add a link/button after this · Move · Duplicate · Remove this**. The ⋮ badge and its menu **dismiss on scroll and on an outside click**.
+- **Change messages now say what + where.** Instead of "Reordered." / "Removed." / "Duplicated…", the chat now reads e.g. *"Moved "Procurement" right in "blog".", "Removed "Finance" from "blog".", "Duplicated "Procurement" in "blog" — edit the copy…"*, and *"Moved the "Blog" section up in "Home"."* — with *"every page"* for shared nav/header/footer changes.
+- **Add a card** = Duplicate a card then edit its text/image; **add by AI** still works via a section's **Edit with AI** ("add 2 more blog cards about …").
+- **Nav links sync site-wide.** Reordering/duplicating/removing a link in a shared nav/header/footer applies to **every page**, like other shared edits.
+- **Safe + reversible.** Each op runs through the same draft-remap (existing edits survive) and **undo**; the in-chat skeleton shows while it applies, then a result line ("Reordered.", "Duplicated — edit the new copy…", "Removed.", "(on every page)").
+- **Under the hood:** new `connected/items.ts` (shared repeated-sibling detection), `applyItemOp`/shared-nav variants in `structure.ts`, server-stamped `data-sa-item` indices (so the click targets the exact element), a guarded `POST /workspace/connected/item` route, and a per-item overlay. 12 new unit tests (125 total green).
+
+**`07:30 PM`** — chat history now survives reload + logout/login
+- **Connected-site chat is persisted** per site (browser storage, keyed by site id) — a reload or logout/login no longer wipes the conversation. Switching sites loads that site's chat; removing a site clears it.
+- **Builder chat upgraded** from per-tab `sessionStorage` (lost on tab close) to per-tenant `localStorage`, so it persists too — keyed by tenant so it can't leak between accounts on a shared browser.
+
+**`06:50 PM`** — connected AI edits: sanitiser no longer rejects real-world markup
+- **Edit-with-AI on a nav/header stopped failing** with "disallowed tag `<input>`" / "disallowed attribute `media`". The HTML sanitiser was a strict allowlist that rejected the harmless attributes real sites use; it's now a **denylist** — it blocks the genuinely dangerous things (scripts, event handlers, framework JS bindings, `javascript:` URLs, unsafe inline CSS, `formaction`/`srcset`) and allows everything else (form fields, `data-*`, `media`, custom attributes). Still fail-closed on a real threat, re-validated after serialisation.
+
+**`06:15 PM`** — manual structure edits show progress + a specific result in chat
+- Add button / remove button / set link / add link-after / move-or-delete section now drop the **buffering skeleton** in chat while they apply, then turn into a specific line (e.g. *"Removed 'Support' from Home."*, *"Added a 'Support' button to Products."*, *"Section moved up."*), with *"(on every page)"* for shared components.
+
 ## 2026-06-24
 
 **`07:05 PM`** — workspace command drawer + cleaner top bar

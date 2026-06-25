@@ -64,6 +64,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: Pr
   return (
     <UnifiedWorkspace
       userEmail={eff.user.email}
+      tenantId={tenantId}
       workspace={workspace}
       initialLiveUrl={liveUrl}
       connectedSites={connectedSites}
