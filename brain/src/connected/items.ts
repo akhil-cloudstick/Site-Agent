@@ -21,8 +21,7 @@ import { HTMLElement } from 'node-html-parser'
 
 const NON_ITEM_TAGS = new Set(['script', 'style', 'link', 'noscript', 'template', 'base', 'meta', 'title', 'head', 'br', 'hr'])
 const tagOf = (el: HTMLElement) => (el.rawTagName || '').toLowerCase()
-const itemSig = (el: HTMLElement) =>
-  tagOf(el) + '|' + (el.getAttribute('class') || '').split(/\s+/).filter(Boolean).sort().join('.')
+const classesOf = (el: HTMLElement) => (el.getAttribute('class') || '').split(/\s+/).filter(Boolean)
 const hasElementChild = (el: HTMLElement) => (el.children as HTMLElement[]).some((c) => !!c.rawTagName)
 const isItemLike = (el: HTMLElement) => hasElementChild(el) || ['a', 'button', 'li'].includes(tagOf(el))
 
@@ -35,12 +34,19 @@ export function itemEls(root: HTMLElement): HTMLElement[] {
     if (parent === body || parent === main) continue // those children are SECTIONS, not items
     const kids = (parent.children as HTMLElement[]).filter((c) => !NON_ITEM_TAGS.has(tagOf(c)))
     if (kids.length < 2) continue
+    // Group siblings by tag + ANY shared class (and tag-alone for class-less ones), so a varied
+    // grid — "card", "card large", "card wide" — groups as cards because they all share "card".
+    // The largest such group is the item set (≥2 AND ≥half the parent's element children).
     const groups = new Map<string, HTMLElement[]>()
-    for (const k of kids) {
-      const s = itemSig(k)
-      const g = groups.get(s)
+    const add = (key: string, k: HTMLElement) => {
+      const g = groups.get(key)
       if (g) g.push(k)
-      else groups.set(s, [k])
+      else groups.set(key, [k])
+    }
+    for (const k of kids) {
+      const cls = classesOf(k)
+      if (cls.length === 0) add(tagOf(k) + '|', k)
+      else for (const c of cls) add(tagOf(k) + '|' + c, k)
     }
     let best: HTMLElement[] = []
     for (const g of groups.values()) if (g.length > best.length) best = g

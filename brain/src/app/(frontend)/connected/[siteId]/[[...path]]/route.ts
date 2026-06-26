@@ -6,6 +6,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { resolveEffectiveTenant } from '@/auth/session'
 import { applyContent } from '@/connected/html'
 import { getConnectedSite } from '@/connected/store'
+import { detectNavStyles, normalizeNavActive } from '@/connected/structure'
 
 export const dynamic = 'force-dynamic'
 
@@ -58,9 +59,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ site
   // An HTML page → apply draft content + the editor (which stays inactive until the
   // workspace turns edit mode on via postMessage — so toggling never reloads) + rewrite
   // asset links so the preview is fully styled under this prefix.
-  const html = (site.sourceHtml ?? {})[pathname]
-  if (typeof html === 'string' && html.trim()) {
+  const rawHtml = (site.sourceHtml ?? {})[pathname]
+  if (typeof rawHtml === 'string' && rawHtml.trim()) {
     const draft = (site.draftContent ?? {})[pathname] ?? {}
+    // Make the nav highlight THIS page using the site's OWN active styling — learned once from
+    // whichever page still carries `aria-current`, so even a page that lost its anchor (e.g. an
+    // AI-built page) highlights correctly. Stored HTML is untouched; a parse edge can't break it.
+    let html = rawHtml
+    try {
+      const styles = detectNavStyles(Object.values((site.sourceHtml ?? {}) as Record<string, string>))
+      html = normalizeNavActive(rawHtml, pathname, styles)
+    } catch {
+      html = rawHtml
+    }
     // Never blank the preview: if injecting the editor throws (a parser edge case on some
     // page), serve the page itself rather than a 500 — the home page especially must render.
     let rendered: string

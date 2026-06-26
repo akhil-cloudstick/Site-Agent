@@ -262,7 +262,19 @@ export interface Page {
     font?: ('sans' | 'serif') | null;
   };
   layout?:
-    | (HeroBlock | FeaturesBlock | ProductsBlock | TestimonialsBlock | CtaBlock | ContactBlock | RichTextBlock)[]
+    | (
+        | HeroBlock
+        | FeaturesBlock
+        | ProductsBlock
+        | TestimonialsBlock
+        | GalleryBlock
+        | FaqBlock
+        | PricingBlock
+        | LogosBlock
+        | CtaBlock
+        | ContactBlock
+        | RichTextBlock
+      )[]
     | null;
   previousLayout?:
     | {
@@ -349,6 +361,82 @@ export interface TestimonialsBlock {
   id?: string | null;
   blockName?: string | null;
   blockType: 'testimonials';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "GalleryBlock".
+ */
+export interface GalleryBlock {
+  heading?: string | null;
+  image?: (number | null) | Media;
+  items?:
+    | {
+        caption?: string | null;
+        image?: (number | null) | Media;
+        id?: string | null;
+      }[]
+    | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'gallery';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "FaqBlock".
+ */
+export interface FaqBlock {
+  heading?: string | null;
+  image?: (number | null) | Media;
+  items?:
+    | {
+        question?: string | null;
+        answer?: string | null;
+        id?: string | null;
+      }[]
+    | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'faq';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "PricingBlock".
+ */
+export interface PricingBlock {
+  heading?: string | null;
+  image?: (number | null) | Media;
+  items?:
+    | {
+        name?: string | null;
+        price?: string | null;
+        period?: string | null;
+        features?: string | null;
+        buttonLabel?: string | null;
+        highlighted?: string | null;
+        id?: string | null;
+      }[]
+    | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'pricing';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "LogosBlock".
+ */
+export interface LogosBlock {
+  heading?: string | null;
+  image?: (number | null) | Media;
+  items?:
+    | {
+        alt?: string | null;
+        image?: (number | null) | Media;
+        id?: string | null;
+      }[]
+    | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'logos';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -696,6 +784,10 @@ export interface PagesSelect<T extends boolean = true> {
         features?: T | FeaturesBlockSelect<T>;
         products?: T | ProductsBlockSelect<T>;
         testimonials?: T | TestimonialsBlockSelect<T>;
+        gallery?: T | GalleryBlockSelect<T>;
+        faq?: T | FaqBlockSelect<T>;
+        pricing?: T | PricingBlockSelect<T>;
+        logos?: T | LogosBlockSelect<T>;
         cta?: T | CtaBlockSelect<T>;
         contact?: T | ContactBlockSelect<T>;
         richText?: T | RichTextBlockSelect<T>;
@@ -768,6 +860,78 @@ export interface TestimonialsBlockSelect<T extends boolean = true> {
     | {
         quote?: T;
         author?: T;
+        image?: T;
+        id?: T;
+      };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "GalleryBlock_select".
+ */
+export interface GalleryBlockSelect<T extends boolean = true> {
+  heading?: T;
+  image?: T;
+  items?:
+    | T
+    | {
+        caption?: T;
+        image?: T;
+        id?: T;
+      };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "FaqBlock_select".
+ */
+export interface FaqBlockSelect<T extends boolean = true> {
+  heading?: T;
+  image?: T;
+  items?:
+    | T
+    | {
+        question?: T;
+        answer?: T;
+        id?: T;
+      };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "PricingBlock_select".
+ */
+export interface PricingBlockSelect<T extends boolean = true> {
+  heading?: T;
+  image?: T;
+  items?:
+    | T
+    | {
+        name?: T;
+        price?: T;
+        period?: T;
+        features?: T;
+        buttonLabel?: T;
+        highlighted?: T;
+        id?: T;
+      };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "LogosBlock_select".
+ */
+export interface LogosBlockSelect<T extends boolean = true> {
+  heading?: T;
+  image?: T;
+  items?:
+    | T
+    | {
+        alt?: T;
         image?: T;
         id?: T;
       };

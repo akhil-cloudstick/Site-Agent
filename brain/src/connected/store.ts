@@ -5,7 +5,7 @@ import { resolveServicePrincipal } from '../broker/adapter'
 import { getBrokerClient } from '../broker/payload-client'
 import { noopCtx, type JobCtx } from '../jobs/registry'
 import type { ContentMap } from './content'
-import { extractContent } from './html'
+import { applyContent, extractContent } from './html'
 import { ingestBuiltSite } from './ingest-folder'
 import {
   addNavLink,
@@ -337,7 +337,7 @@ export async function applyElementToPage(
   // If the edited button/link is inside a SHARED component (nav/header/footer), apply the
   // SAME op to every page's matching component — so the change reflects site-wide (like
   // content edits), applied per-page so each page keeps its own "active" highlight.
-  const loc = op.op !== 'add-button' ? sharedComponentLocator(oldHtml, op.index) : null
+  const loc = op.op !== 'add-button' && op.op !== 'link-image' ? sharedComponentLocator(oldHtml, op.index) : null
   if (loc) {
     const nextSource: PageHtmlMap = { ...sourceHtml }
     const nextDraft: SiteContentMap = { ...draftAll }
@@ -577,14 +577,19 @@ export async function addConnectedPage(
   // (choosing the page) via addSiteNavLink. The page is reachable by its tab meanwhile.
   // The new page = the chosen page with its <main> reset to a starter, OR seeded with
   // AI-generated, RE-SANITISED main content.
+  // Clone from the source page with its CURRENT edits applied (renamed nav labels, swapped
+  // images, edited text) — not the raw stored HTML, which still holds the pre-edit values.
+  const fromHtml = applyContent(sourceHtml[fromPath], draft[fromPath] ?? {})
   let cloneHtml: string
   if (opts.mainHtml) {
     const safe = parseGeneratedSection({ html: opts.mainHtml })
     // Strip any generated header/nav/footer — the cloned page already has the site chrome.
-    cloneHtml = safe.ok ? setMainContent(sourceHtml[fromPath], stripPageChrome(safe.html)) : clonePageForNewRoute(sourceHtml[fromPath], title)
+    cloneHtml = safe.ok ? setMainContent(fromHtml, stripPageChrome(safe.html)) : clonePageForNewRoute(fromHtml, title)
   } else {
-    cloneHtml = clonePageForNewRoute(sourceHtml[fromPath], title)
+    cloneHtml = clonePageForNewRoute(fromHtml, title)
   }
+  // (The cloned page's nav highlight is corrected per page at render by normalizeNavActive — we
+  // don't touch the stored markup.)
   sourceHtml[newPath] = cloneHtml
   const newContent = extractContent(cloneHtml)
   draft[newPath] = newContent

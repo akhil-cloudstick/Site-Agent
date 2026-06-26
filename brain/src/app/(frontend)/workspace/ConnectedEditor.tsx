@@ -213,7 +213,7 @@ export function ConnectedEditor({
   const [newPageName, setNewPageName] = useState('')
   const [confirmDelPage, setConfirmDelPage] = useState<string | null>(null)
   // Deterministic button/link editor: set a redirect, or add a button to a section.
-  const [linkEditor, setLinkEditor] = useState<{ mode: 'set' | 'add' | 'after'; index?: number; sectionIndex?: number; text: string; target: string; customUrl: string; name?: string } | null>(null)
+  const [linkEditor, setLinkEditor] = useState<{ mode: 'set' | 'add' | 'after' | 'image'; index?: number; imgIndex?: number; sectionIndex?: number; text: string; target: string; customUrl: string; name?: string } | null>(null)
   const pagesRef = useRef<string[]>([]) // latest page list, for use inside the message effect
   const [cfProject, setCfProject] = useState('') // editable Cloudflare project for the active site
   const [showSettings, setShowSettings] = useState(false)
@@ -230,6 +230,7 @@ export function ConnectedEditor({
   const frameRefs = useRef<Record<string, HTMLIFrameElement | null>>({})
   const loadedRef = useRef<Set<string>>(new Set()) // srcs that have finished loading
   const chatRef = useRef<HTMLTextAreaElement>(null)
+  const chatScrollRef = useRef<HTMLDivElement>(null)
   const pendingImg = useRef<{ id: string } | null>(null)
 
   const fileToDataUrl = (file: File) =>
@@ -304,6 +305,12 @@ export function ConnectedEditor({
   useEffect(() => {
     if (chatSite != null) saveChat(chatSite, messages)
   }, [messages, chatSite])
+  // Keep the chat pinned to the LATEST message — on load and whenever a message or the
+  // buffering skeleton is added — so the newest reply is always in view without scrolling.
+  useEffect(() => {
+    const el = chatScrollRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [messages])
   // The launcher's "Connect a website" opens the connect form.
   const [prevSignal, setPrevSignal] = useState(openConnectSignal)
   if (openConnectSignal !== prevSignal) {
@@ -331,6 +338,8 @@ export function ConnectedEditor({
       // Section structure controls (move/delete a whole band) from the preview toolbars.
       const section = (e.data as any)?.saSection
       if (section && (section.op === 'move' || section.op === 'delete') && typeof section.index === 'number') {
+        const secNm = typeof section.name === 'string' && section.name ? `the “${section.name}” section` : 'this section'
+        addMsg('you', section.op === 'delete' ? `Delete ${secNm}` : `Move ${secNm} ${section.dir === 'up' ? 'up' : 'down'}`)
         addMsg('agent', SKELETON)
         void fetch('/workspace/connected/structure', {
           method: 'POST',
@@ -354,10 +363,11 @@ export function ConnectedEditor({
       // Repeated-item controls (a card / nav link / button): reorder, duplicate, remove.
       const item = (e.data as any)?.saItem
       if (item && (item.op === 'move' || item.op === 'duplicate' || item.op === 'remove') && typeof item.index === 'number') {
-        addMsg('agent', SKELETON)
         const nm = typeof item.name === 'string' && item.name ? `“${item.name}”` : 'the item'
         const dir = typeof item.dirLabel === 'string' ? item.dirLabel : ''
         const page = `“${pageLabel(activePath)}”`
+        addMsg('you', item.op === 'duplicate' ? `Duplicate ${nm}` : item.op === 'remove' ? `Remove ${nm}` : `Move ${nm}${dir ? ` ${dir}` : ''}`)
+        addMsg('agent', SKELETON)
         void fetch('/workspace/connected/item', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -399,7 +409,7 @@ export function ConnectedEditor({
       const removeEl = (e.data as any)?.saRemoveEl
       if (removeEl && typeof removeEl.index === 'number') {
         const nm = typeof removeEl.name === 'string' && removeEl.name ? `“${removeEl.name}”` : 'that'
-        void elementOp({ op: 'remove', index: removeEl.index }, `Removed ${nm} from “${pageLabel(activePath)}”.`)
+        void elementOp({ op: 'remove', index: removeEl.index }, `Removed ${nm} from “${pageLabel(activePath)}”.`, `Remove ${nm}`)
         return
       }
       const addBtn = (e.data as any)?.saAddButton
@@ -411,6 +421,12 @@ export function ConnectedEditor({
       const addAfter = (e.data as any)?.saAddAfter
       if (addAfter && typeof addAfter.index === 'number') {
         setLinkEditor({ mode: 'after', index: addAfter.index, text: 'New link', target: pagesRef.current.find((p) => p !== activePath) ?? pagesRef.current[0] ?? '/', customUrl: '', name: typeof addAfter.name === 'string' ? addAfter.name : undefined })
+        return
+      }
+      // "Add link" on a bare image → wrap it in a link to the chosen page/URL.
+      const linkImg = (e.data as any)?.saLinkImage
+      if (linkImg && typeof linkImg.imgIndex === 'number') {
+        setLinkEditor({ mode: 'image', imgIndex: linkImg.imgIndex, text: '', target: pagesRef.current.find((p) => p !== activePath) ?? pagesRef.current[0] ?? '/', customUrl: '' })
         return
       }
       // Section "Edit with AI" → target this whole section; the next chat message edits it.
@@ -541,6 +557,8 @@ export function ConnectedEditor({
     const target = pendingImg.current
     pendingImg.current = null
     if (!file || !target || !activeId) return
+    addMsg('you', 'Change this image')
+    addMsg('agent', SKELETON)
     setBusy(true)
     try {
       const fd = new FormData()
@@ -550,7 +568,13 @@ export function ConnectedEditor({
       fd.append('file', file)
       const res = await fetch('/workspace/connected/edit', { method: 'POST', body: fd })
       const data = await res.json()
-      if (data.ok) bumpPaths(Array.isArray(data.paths) && data.paths.length ? data.paths : [activePath])
+      if (data.ok) {
+        const paths = Array.isArray(data.paths) && data.paths.length ? data.paths : [activePath]
+        bumpPaths(paths)
+        replaceSkeleton(`Image updated${paths.length > 1 ? ' (on every page)' : ''}.`)
+      } else replaceSkeleton(data.message ?? 'Could not update the image.')
+    } catch {
+      replaceSkeleton('Something went wrong — please try again.')
     } finally {
       setBusy(false)
     }
@@ -758,6 +782,8 @@ export function ConnectedEditor({
 
   async function undo() {
     if (!activeId || busy) return
+    addMsg('you', 'Undo the last change')
+    addMsg('agent', SKELETON)
     setBusy(true)
     try {
       const res = await fetch('/workspace/connected/undo', {
@@ -766,8 +792,15 @@ export function ConnectedEditor({
         body: JSON.stringify({ siteId: activeId }),
       })
       const data = await res.json()
-      if (data.ok && data.undone) bumpReload(activePath)
-      else if (data.ok) addMsg('agent', 'Nothing left to undo.')
+      if (data.ok && data.undone) {
+        if (Array.isArray(data.paths) && data.paths.length) bumpPaths(data.paths)
+        else bumpReload(activePath)
+        replaceSkeleton('Undid the last change.')
+      } else if (data.ok) {
+        replaceSkeleton('Nothing left to undo.')
+      } else replaceSkeleton(data.message ?? 'Could not undo that.')
+    } catch {
+      replaceSkeleton('Something went wrong — please try again.')
     } finally {
       setBusy(false)
     }
@@ -846,9 +879,11 @@ export function ConnectedEditor({
   }
 
   // Deterministic button/link op (set redirect / remove / add a button) — no AI, but it
-  // takes a moment: show the in-chat skeleton, then a specific result message.
-  async function elementOp(payload: Record<string, unknown>, baseMsg: string) {
+  // takes a moment: echo the request as a "you" bubble (like the AI flow), show the in-chat
+  // skeleton, then a specific result message.
+  async function elementOp(payload: Record<string, unknown>, baseMsg: string, reqMsg: string) {
     if (!activeId || busy) return
+    addMsg('you', reqMsg)
     addMsg('agent', SKELETON)
     setBusy(true)
     try {
@@ -881,12 +916,14 @@ export function ConnectedEditor({
     setLinkEditor(null)
     if (le.mode === 'add') {
       const t = le.text.trim() || 'Button'
-      await elementOp({ op: 'add-button', sectionIndex: le.sectionIndex, text: t, href }, `Added a “${t}” button to “${page}”.`)
+      await elementOp({ op: 'add-button', sectionIndex: le.sectionIndex, text: t, href }, `Added a “${t}” button to “${page}”.`, `Add a “${t}” button`)
     } else if (le.mode === 'after') {
       const t = le.text.trim() || 'Link'
-      await elementOp({ op: 'add-after', index: le.index, text: t, href }, `Added “${t}” to “${page}”.`)
+      await elementOp({ op: 'add-after', index: le.index, text: t, href }, `Added “${t}” to “${page}”.`, `Add “${t}” after this`)
+    } else if (le.mode === 'image') {
+      await elementOp({ op: 'link-image', imgIndex: le.imgIndex, href }, `Linked the image to ${targetName}.`, `Link this image to ${targetName}`)
     } else {
-      await elementOp({ op: 'set-link', index: le.index, href }, `Linked ${le.name ? `“${le.name}”` : 'that'} to ${targetName}.`)
+      await elementOp({ op: 'set-link', index: le.index, href }, `Linked ${le.name ? `“${le.name}”` : 'that'} to ${targetName}.`, `Set ${le.name ? `“${le.name}”` : 'this link'} to ${targetName}`)
     }
   }
 
@@ -1243,7 +1280,7 @@ export function ConnectedEditor({
       {/* Left panel — the conversation. Site controls live in the drawer (☰). */}
       <div style={{ width: 360, minWidth: 300, borderRight: '1px solid #e2e2e2', display: 'flex', flexDirection: 'column', background: '#fafafa' }}>
         {/* Conversation (same bubble style as the builder) */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div ref={chatScrollRef} style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
           {messages.length === 0 && active && (
             <p style={{ color: '#888', fontSize: 13 }}>
               {canEdit
@@ -1400,9 +1437,7 @@ export function ConnectedEditor({
                 ))}
               {canEdit && (
                 <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 6 }}>
-                  {editMode && (
-                    <button onClick={() => setAddSectionAt(99999)} disabled={busy || genBusy} title="Add a section to this page" style={{ ...btn, borderColor: '#2563eb', color: '#2563eb' }}>+ Section</button>
-                  )}
+                  {/* "+ Section" removed from the top bar — add a section via a section's ⋮ → "Add section here". */}
                   <button onClick={undo} disabled={busy} title="Undo the last edit in the preview" style={btn}>↶ Undo</button>
                 </span>
               )}
@@ -1563,8 +1598,8 @@ export function ConnectedEditor({
       {linkEditor && (
         <div style={modalOverlay} onClick={() => setLinkEditor(null)}>
           <div style={{ width: 440, maxWidth: '92vw', background: '#fff', borderRadius: 12, boxShadow: '0 20px 60px rgba(0,0,0,0.25)', padding: 22 }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ fontWeight: 600, fontSize: 16, color: '#111827', marginBottom: 8 }}>{linkEditor.mode === 'set' ? 'Set link / redirect' : linkEditor.mode === 'add' ? 'Add a button' : 'Add a link'}</div>
-            {linkEditor.mode !== 'set' && (
+            <div style={{ fontWeight: 600, fontSize: 16, color: '#111827', marginBottom: 8 }}>{linkEditor.mode === 'set' ? 'Set link / redirect' : linkEditor.mode === 'add' ? 'Add a button' : linkEditor.mode === 'image' ? 'Link this image' : 'Add a link'}</div>
+            {(linkEditor.mode === 'add' || linkEditor.mode === 'after') && (
               <div style={{ marginBottom: 12 }}>
                 <label style={{ fontSize: 12, color: '#475467', display: 'block', marginBottom: 4 }}>{linkEditor.mode === 'add' ? 'Button text' : 'Link text'}</label>
                 <input value={linkEditor.text} onChange={(e) => setLinkEditor({ ...linkEditor, text: e.target.value })} placeholder={linkEditor.mode === 'add' ? 'Learn more' : 'Products'} style={{ ...inp, width: '100%', padding: '8px 10px' }} />

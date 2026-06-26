@@ -193,6 +193,83 @@ function navTemplateAnchor(root: HTMLElement, knownRoutes: string[]): HTMLElemen
   return ints.length ? ints[ints.length - 1] : null
 }
 
+export interface NavStyles {
+  active: string
+  inactive: string
+}
+
+const navMenuShare = (toks: string[], ref: Set<string>) =>
+  toks.length > 0 && toks.filter((t) => ref.has(t)).length >= Math.max(2, Math.ceil(ref.size * 0.5))
+
+/**
+ * Learn a site's nav highlight styling ONCE, from any page that still has the standard
+ * `aria-current="page"`: the active link's exact class string + an inactive menu sibling's exact
+ * class string. Returns null if no page exposes the anchor. (Pages created/cloned by the editor
+ * can lose their `aria-current`, so we read it from a page that kept it and reuse it everywhere.)
+ */
+export function detectNavStyles(pages: string[]): NavStyles | null {
+  for (const html of pages) {
+    if (typeof html !== 'string' || !/aria-current/i.test(html)) continue
+    const links = parse(html, { comment: true }).querySelectorAll('nav a, header a') as HTMLElement[]
+    const active = links.find((a) => a.getAttribute('aria-current'))
+    if (!active) continue
+    const activeCls = active.getAttribute('class') || ''
+    const ref = new Set(activeCls.split(/\s+/).filter(Boolean))
+    let inactive = ''
+    for (const a of links)
+      if (a !== active && !a.getAttribute('aria-current') && navMenuShare((a.getAttribute('class') || '').split(/\s+/).filter(Boolean), ref)) {
+        inactive = a.getAttribute('class') || ''
+        break
+      }
+    if (activeCls && inactive) return { active: activeCls, inactive }
+  }
+  return null
+}
+
+/**
+ * GLOBAL, render-time nav-highlight normaliser — used by the preview + publish on ANY connected
+ * site, NEVER stored. It makes the nav highlight only the current page, WITHOUT knowing the
+ * site's class names:
+ *  - `styles` (from `detectNavStyles`) carries the site's OWN active vs inactive menu-link class
+ *    strings. If omitted, they're read from THIS page's `aria-current` anchor; if neither is
+ *    available we leave the nav exactly as the site built it (no guessing).
+ *  - Re-apply those whole class strings: the current-route link gets the active string +
+ *    `aria-current`; the other MENU links get the inactive string. Copying whole strings means
+ *    the site's styling/shape is preserved exactly — we never invent or move individual classes.
+ *  - "Menu links" are detected by class-shape overlap with the active style, so the LOGO and a
+ *    CTA button (which live in the nav but look nothing like a menu item) are left untouched.
+ */
+export function normalizeNavActive(html: string, currentRoute: string, styles?: NavStyles | null): string {
+  const root = parse(html, { comment: true })
+  const links = root.querySelectorAll('nav a, header a') as HTMLElement[]
+  if (!links.length) return html
+  let activeCls = styles?.active ?? ''
+  let inactiveCls = styles?.inactive ?? ''
+  if (!activeCls) {
+    const active = links.find((a) => a.getAttribute('aria-current'))
+    if (!active) return html // no styles passed AND no anchor on this page → don't touch it
+    activeCls = active.getAttribute('class') || ''
+    const ref = new Set(activeCls.split(/\s+/).filter(Boolean))
+    for (const a of links)
+      if (a !== active && !a.getAttribute('aria-current') && navMenuShare((a.getAttribute('class') || '').split(/\s+/).filter(Boolean), ref)) {
+        inactiveCls = a.getAttribute('class') || ''
+        break
+      }
+  }
+  const ref = new Set(activeCls.split(/\s+/).filter(Boolean))
+  for (const a of links) {
+    if (!navMenuShare((a.getAttribute('class') || '').split(/\s+/).filter(Boolean), ref)) continue // logo / CTA → leave alone
+    if (routeOfHref(a.getAttribute('href')) === currentRoute) {
+      if (activeCls) a.setAttribute('class', activeCls)
+      a.setAttribute('aria-current', 'page')
+    } else {
+      if (inactiveCls) a.setAttribute('class', inactiveCls)
+      a.removeAttribute('aria-current')
+    }
+  }
+  return root.toString()
+}
+
 /**
  * Best-effort: add a nav link for `newPath` to a page, by cloning an existing menu anchor
  * (so it inherits the nav's styling) and retargeting it. If the menu uses <li> wrappers,
@@ -212,6 +289,8 @@ export function addNavLink(html: string, newPath: string, label: string, knownRo
   }
   const tmpl = navTemplateAnchor(root, knownRoutes)
   if (!tmpl) return html
+  // Clone the template's styling verbatim. The current-page highlight is decided at render by
+  // normalizeNavActive (per page), so we don't need to special-case the active class here.
   const cls = tmpl.getAttribute('class')
   const anchor = `<a href="${escapeAttr(newPath)}"${cls ? ` class="${escapeAttr(cls)}"` : ''}>${escapeHtml(label)}</a>`
   const parent = tmpl.parentNode as HTMLElement | null
@@ -232,6 +311,13 @@ export function linkEls(root: HTMLElement): HTMLElement[] {
   return body.querySelectorAll('a, button') as HTMLElement[]
 }
 
+/** Page images in document order — the index a "link this image" op targets (images aren't
+ *  in `linkEls`). Mirrors the server-stamped `data-sa-img` index the client reads. */
+export function imgEls(root: HTMLElement): HTMLElement[] {
+  const body = (root.querySelector('body') as HTMLElement) ?? root
+  return body.querySelectorAll('img') as HTMLElement[]
+}
+
 /** Keep a redirect target safe: relative/route/anchor, or http(s)/mailto/tel; else "#". */
 function safeHref(href: string): string {
   const v = (href || '').trim()
@@ -246,10 +332,23 @@ export type ElementOp =
   | { op: 'remove'; index: number }
   | { op: 'add-button'; sectionIndex: number; text: string; href: string }
   | { op: 'add-after'; index: number; text: string; href: string }
+  | { op: 'link-image'; imgIndex: number; href: string }
 
 /** Apply one deterministic button/link op to a page's HTML; null if invalid. */
 export function applyElementOp(html: string, op: ElementOp): string | null {
   const root = parse(html, { comment: true })
+  if (op.op === 'link-image') {
+    // Wrap a bare <img> in an <a> so a standalone image/logo becomes a link.
+    const img = imgEls(root)[op.imgIndex]
+    if (!img) return null
+    if (tagOf(img.parentNode as HTMLElement) === 'a') {
+      ;(img.parentNode as HTMLElement).setAttribute('href', safeHref(op.href)) // already linked → just retarget
+    } else {
+      img.insertAdjacentHTML('beforebegin', `<a href="${escapeAttr(safeHref(op.href))}" style="display:inline-block;text-decoration:none">${img.outerHTML}</a>`)
+      img.parentNode?.removeChild(img)
+    }
+    return root.toString()
+  }
   if (op.op === 'add-button') {
     const sec = sectionEls(root)[op.sectionIndex]
     if (!sec) return null
@@ -452,7 +551,7 @@ export function replaceItemInComponent(html: string, loc: { tag: string; compInd
 
 /** Apply an element op to the element at `op.index` WITHIN the located shared component. */
 export function applyElementOpInComponent(html: string, loc: { tag: string; compIndex: number }, op: ElementOp): string | null {
-  if (op.op === 'add-button') return null
+  if (op.op === 'add-button' || op.op === 'link-image') return null // not shared-component ops
   const root = parse(html, { comment: true })
   const comp = (root.querySelectorAll(loc.tag) as HTMLElement[])[loc.compIndex]
   if (!comp) return null

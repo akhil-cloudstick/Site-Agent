@@ -24,6 +24,24 @@ const DEFAULTS: Record<BlockType, () => any> = {
     ],
   }),
   testimonials: () => ({ blockType: 'testimonials', heading: 'What customers say', items: [{ quote: 'A great quote about you.', author: 'A happy customer' }] }),
+  gallery: () => ({ blockType: 'gallery', heading: 'Gallery', items: [{ caption: 'Photo one' }, { caption: 'Photo two' }, { caption: 'Photo three' }] }),
+  faq: () => ({
+    blockType: 'faq',
+    heading: 'Frequently asked questions',
+    items: [
+      { question: 'What do you offer?', answer: 'Describe it here.' },
+      { question: 'How does it work?', answer: 'Explain it here.' },
+    ],
+  }),
+  pricing: () => ({
+    blockType: 'pricing',
+    heading: 'Pricing',
+    items: [
+      { name: 'Basic', price: '$9', period: '/mo', features: 'Feature one\nFeature two', buttonLabel: 'Choose Basic' },
+      { name: 'Pro', price: '$29', period: '/mo', features: 'Everything in Basic\nMore features', buttonLabel: 'Choose Pro', highlighted: 'true' },
+    ],
+  }),
+  logos: () => ({ blockType: 'logos', heading: 'Trusted by', items: [{ alt: 'Logo one' }, { alt: 'Logo two' }, { alt: 'Logo three' }, { alt: 'Logo four' }] }),
   cta: () => ({ blockType: 'cta', heading: 'Ready to get started?', buttonLabel: 'Get in touch' }),
   contact: () => ({ blockType: 'contact', heading: 'Contact us', text: 'Get in touch with us today.', buttonLabel: 'Email us' }),
   richText: () => ({ blockType: 'richText', heading: 'About', body: 'Tell your story here.' }),
@@ -32,6 +50,10 @@ const DEFAULTS: Record<BlockType, () => any> = {
 const newItem = (blockType: string) => {
   if (blockType === 'testimonials') return { quote: 'A great quote.', author: 'A customer' }
   if (blockType === 'products') return { name: 'New product', description: 'A short description.' }
+  if (blockType === 'gallery') return { caption: 'New photo' }
+  if (blockType === 'faq') return { question: 'A new question?', answer: 'The answer.' }
+  if (blockType === 'pricing') return { name: 'New plan', price: '$0', period: '/mo', features: 'Feature one\nFeature two', buttonLabel: 'Choose' }
+  if (blockType === 'logos') return { alt: 'New logo' }
   return { title: 'New item', text: 'Describe it.' }
 }
 
@@ -67,7 +89,8 @@ export function applyStructureOp(page: any, body: any): any[] | null {
     case 'add-item': {
       if (!inRange) return null
       const b = layout[index]
-      if (b.blockType !== 'features' && b.blockType !== 'testimonials' && b.blockType !== 'products') return null
+      const ITEM_BLOCKS = ['features', 'testimonials', 'products', 'gallery', 'faq', 'pricing', 'logos']
+      if (!ITEM_BLOCKS.includes(b.blockType)) return null
       if (!Array.isArray(b.items)) b.items = []
       b.items.push(newItem(b.blockType))
       return layout

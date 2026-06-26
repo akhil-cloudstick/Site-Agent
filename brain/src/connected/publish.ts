@@ -7,6 +7,7 @@ import { cloudflareConfigured, deployConnectedSite } from '../publish/deploy-clo
 import type { ContentMap } from './content'
 import { applyContent } from './html'
 import { getConnectedSite, updateConnectedSite, type PageHtmlMap, type SiteContentMap } from './store'
+import { detectNavStyles, normalizeNavActive } from './structure'
 
 const pathForRoute = (route: string) => (route === '/' || route === '' ? 'index.html' : `${route.replace(/^\/+/, '')}/index.html`)
 
@@ -74,10 +75,12 @@ export async function buildWholeSite(sourcePath: string, sourceHtml: PageHtmlMap
   ctx.reporter(45, 'Bundling images…')
   const bundled = await bundleMedia(content, dir)
   ctx.reporter(60, 'Applying your changes…')
+  const navStyles = detectNavStyles(Object.values(sourceHtml))
   for (const [route, html] of Object.entries(sourceHtml)) {
     const dest = fileForRoute(dir, route)
-    // Apply onto the stored HTML (clean, no editor/prefix) and write to the page's file.
-    const out = applyContent(html, bundled[route] ?? {})
+    // Apply onto the stored HTML (clean, no editor/prefix), with each page's nav highlighting
+    // its own link (the site's own active styling), and write to the page's file.
+    const out = applyContent(normalizeNavActive(html, route, navStyles), bundled[route] ?? {})
     if (dest) await writeFile(dest, out, 'utf8')
     else {
       const fallback = path.join(dir, pathForRoute(route))
@@ -90,8 +93,9 @@ export async function buildWholeSite(sourcePath: string, sourceHtml: PageHtmlMap
 /** Render a connected site's pages with the given content (applied onto the stored HTML). */
 export function renderSite(sourceHtml: PageHtmlMap, content: SiteContentMap): PageHtmlMap {
   const out: PageHtmlMap = {}
+  const navStyles = detectNavStyles(Object.values(sourceHtml))
   for (const [pathname, html] of Object.entries(sourceHtml)) {
-    out[pathname] = applyContent(html, content[pathname] ?? {})
+    out[pathname] = applyContent(normalizeNavActive(html, pathname, navStyles), content[pathname] ?? {})
   }
   return out
 }

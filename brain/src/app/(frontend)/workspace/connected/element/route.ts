@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
   const pathname = String(body?.path || '/')
   const index = Number(body?.index)
   const sectionIndex = Number(body?.sectionIndex)
+  const imgIndex = Number(body?.imgIndex)
   if (!siteId) return NextResponse.json({ ok: false, message: 'Bad request.' }, { status: 400 })
 
   let op: ElementOp | null = null
@@ -34,6 +35,8 @@ export async function POST(req: NextRequest) {
     op = { op: 'add-after', index, text: String(body?.text ?? 'Link'), href: String(body?.href ?? '#') }
   else if (body?.op === 'add-button' && Number.isInteger(sectionIndex))
     op = { op: 'add-button', sectionIndex, text: String(body?.text ?? 'Button'), href: String(body?.href ?? '#') }
+  else if (body?.op === 'link-image' && Number.isInteger(imgIndex))
+    op = { op: 'link-image', imgIndex, href: String(body?.href ?? '#') }
   if (!op) return NextResponse.json({ ok: false, message: 'That change is not allowed.' }, { status: 400 })
 
   try {

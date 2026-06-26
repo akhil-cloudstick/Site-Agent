@@ -5,6 +5,8 @@ import { itemEls } from './items'
 import { parse } from 'node-html-parser'
 import {
   addNavLink,
+  normalizeNavActive,
+  detectNavStyles,
   applyElementOp,
   applyElementOpInComponent,
   applyItemOp,
@@ -113,6 +115,53 @@ describe('addNavLink (nav shortcut to a new page)', () => {
   })
 })
 
+describe('normalizeNavActive (highlight only the current page, using the site’s own styling)', () => {
+  // A real-world Astro-style nav: aria-current on the active link, an active vs inactive class
+  // STRING, a logo (different classes), and a polluted cloned link that wrongly carries the
+  // active class without aria-current.
+  const A = 'rounded px-3 py-2 text-sm font-medium text-white bg-white/10' // active class string
+  const I = 'rounded px-3 py-2 text-sm font-medium text-white/60 hover:bg-white/5' // inactive
+  const POLLUTED = `<header><nav>
+    <a href="/" class="logo flex items-center gap-2">Brand</a>
+    <ul>
+      <li><a href="/" class="${I}">Home</a></li>
+      <li><a href="/blog" aria-current="page" class="${A}">Blog</a></li>
+      <li><a href="/products" class="${A}">Products</a></li>
+    </ul>
+  </nav></header><main></main>`
+  it('moves the highlight to the current page (here /products) and clears the others', () => {
+    const out = normalizeNavActive(POLLUTED, '/products')
+    expect(out).toMatch(/href="\/products"[^>]*aria-current="page"/)
+    expect(out).toMatch(/href="\/products"[^>]*bg-white\/10/) // gets the site's exact active style
+    expect(out).not.toMatch(/href="\/blog"[^>]*aria-current/) // the stale active is demoted
+    expect(out).toMatch(/href="\/blog"[^>]*text-white\/60/) // …to the site's exact inactive style
+  })
+  it('NEVER touches the logo / non-menu links', () => {
+    expect(normalizeNavActive(POLLUTED, '/products')).toContain('class="logo flex items-center gap-2"')
+  })
+  it('leaves the nav exactly as-is when there is no aria-current AND no styles passed (no guessing)', () => {
+    const nav = `<header><nav><ul><li><a href="/" class="x">Home</a></li><li><a href="/blog" class="x">Blog</a></li></ul></nav></header><main></main>`
+    expect(normalizeNavActive(nav, '/blog')).toBe(nav)
+  })
+  it('highlights an AI-built page that LOST its aria-current, using styles detected from another page', () => {
+    // /products has no active link at all (all inactive) — exactly the AI-built-page case.
+    const productsPage = `<header><nav>
+      <a href="/" class="logo flex">Brand</a>
+      <ul>
+        <li><a href="/" class="${I}">Home</a></li>
+        <li><a href="/blog" class="${I}">Blog</a></li>
+        <li><a href="/products" class="${I}">Products</a></li>
+      </ul>
+    </nav></header><main></main>`
+    const styles = detectNavStyles([POLLUTED]) // a page that DID keep aria-current
+    expect(styles).toBeTruthy()
+    const out = normalizeNavActive(productsPage, '/products', styles)
+    expect(out).toMatch(/href="\/products"[^>]*aria-current="page"/)
+    expect(out).toMatch(/href="\/products"[^>]*bg-white\/10/) // got the active style from the other page
+    expect(out).toMatch(/class="logo flex"/) // logo untouched
+  })
+})
+
 describe('applyElementOp (deterministic button/link editing)', () => {
   const PG = `<html><body><main><section class="hero"><h1>Hi</h1><a href="/old">Quote</a><button>Demo</button></section></main></body></html>`
   it('sets a redirect on a link', () => {
@@ -142,6 +191,17 @@ describe('applyElementOp (deterministic button/link editing)', () => {
   it('adds a link right after another, cloning its style/position', () => {
     const out = applyElementOp(PG, { op: 'add-after', index: 0, text: 'Pricing', href: '/pricing' })!
     expect(out).toMatch(/href="\/old"[^>]*>Quote<\/a><a href="\/pricing"[^>]*>Pricing<\/a>/)
+  })
+  it('wraps a bare image in a link (Add link on an image)', () => {
+    const h = '<html><body><main><section><img src="/logo.png" alt="Logo"></section></main></body></html>'
+    const out = applyElementOp(h, { op: 'link-image', imgIndex: 0, href: '/about' })!
+    expect(out).toMatch(/<a href="\/about"[^>]*><img[^>]*src="\/logo.png"/)
+  })
+  it('retargets an already-linked image instead of double-wrapping', () => {
+    const h = '<html><body><main><a href="/old"><img src="/logo.png"></a></main></body></html>'
+    const out = applyElementOp(h, { op: 'link-image', imgIndex: 0, href: '/new' })!
+    expect(out).toContain('href="/new"')
+    expect(out).not.toContain('href="/old"')
   })
 })
 
@@ -277,6 +337,15 @@ describe('itemEls (repeated-sibling detection)', () => {
   })
   it('does NOT treat top-level sections as items', () => {
     expect(itemEls(parse(PAGE))).toHaveLength(0)
+  })
+  it('detects a varied-class card grid (card / card large / card wide share "card")', () => {
+    const grid = `<html><body><main><section><div class="grid">
+      <article class="card large"><h3>Big</h3></article>
+      <article class="card"><h3>Two</h3></article>
+      <article class="card"><h3>Three</h3></article>
+      <article class="card wide"><h3>Four</h3></article>
+    </div></section></main></body></html>`
+    expect(itemEls(parse(grid)).map((el) => el.querySelector('h3')!.text)).toEqual(['Big', 'Two', 'Three', 'Four'])
   })
 })
 

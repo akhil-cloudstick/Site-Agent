@@ -97,6 +97,7 @@ export function WorkspaceClient({
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null)
   const [target, setTarget] = useState<{ index: number; label: string } | null>(null)
   const chatRef = useRef<HTMLTextAreaElement>(null)
+  const chatScrollRef = useRef<HTMLDivElement>(null)
   // Width of the chat panel in px; the user can drag the divider to resize it.
   const [chatWidth, setChatWidth] = useState(420)
 
@@ -189,6 +190,12 @@ export function WorkspaceClient({
       localStorage.setItem(chatStoreKey, JSON.stringify(messages))
     } catch {}
   }, [messages, chatStoreKey])
+
+  // Keep the chat pinned to the latest message (load + new reply/typing indicator).
+  useEffect(() => {
+    const el = chatScrollRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [messages])
 
   async function send() {
     const text = input.trim()
@@ -492,7 +499,7 @@ export function WorkspaceClient({
 
       {/* Chat */}
       <div style={{ width: chatWidth, flex: 'none', display: 'flex', flexDirection: 'column', background: '#fafafa' }}>
-        <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div ref={chatScrollRef} style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
           {messages.map((m, i) => (
             <div
               key={i}
@@ -898,6 +905,126 @@ export function WorkspaceClient({
                   </section>
                 )
               }
+              if (block.type === 'gallery') {
+                return (
+                  <section key={i} style={{ position: 'relative', padding: '56px 48px', textAlign: 'center', background: bg ? '#222' : '#fff', ...bgStyle }}>
+                    {overlay}
+                    {sectionMenu(i, current.layout.length, !!bg)}
+                    <div style={{ position: 'relative', zIndex: 1 }}>
+                      <h2 style={{ fontSize: 30, margin: '0 0 36px', color: bg ? '#fff' : '#111' }}>
+                        <Editable value={block.heading} placeholder="(gallery heading)" fontSize={30} onSave={(v) => saveField(`layout.${i}.heading`, v)} />
+                      </h2>
+                      <div style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap' }}>
+                        {block.items.map((it, j) => (
+                          <figure key={j} style={{ position: 'relative', flex: '1 1 200px', maxWidth: 300, margin: 0 }}>
+                            {itemMenu(i, j, !!it.imageUrl)}
+                            {it.imageUrl ? (
+                              <img src={it.imageUrl} alt="" style={{ width: '100%', height: 200, objectFit: 'cover', display: 'block', borderRadius: 10 }} />
+                            ) : (
+                              <div style={{ width: '100%', height: 200, background: '#eee', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bbb', fontSize: 13 }}>No image</div>
+                            )}
+                            <figcaption style={{ fontSize: 13, color: bg ? '#ddd' : '#666', marginTop: 8 }}>
+                              <Editable value={it.caption} placeholder="(caption)" fontSize={13} onSave={(v) => saveField(`layout.${i}.items.${j}.caption`, v)} />
+                            </figcaption>
+                          </figure>
+                        ))}
+                        {editMode && <button onClick={() => addItem(i)} disabled={busy} title="Add an image" style={{ alignSelf: 'center', padding: '12px 18px', borderRadius: 10, border: '1px dashed #bbb', background: '#fafafa', color: '#555', cursor: busy ? 'default' : 'pointer', fontSize: 14 }}>+ Add image</button>}
+                      </div>
+                    </div>
+                  </section>
+                )
+              }
+              if (block.type === 'faq') {
+                return (
+                  <section key={i} style={{ position: 'relative', padding: '56px 48px', textAlign: 'center', background: bg ? '#222' : '#fafafa', ...bgStyle }}>
+                    {overlay}
+                    {sectionMenu(i, current.layout.length, !!bg)}
+                    <div style={{ position: 'relative', zIndex: 1 }}>
+                      <h2 style={{ fontSize: 30, margin: '0 0 36px', color: bg ? '#fff' : '#111' }}>
+                        <Editable value={block.heading} placeholder="(FAQ heading)" fontSize={30} onSave={(v) => saveField(`layout.${i}.heading`, v)} />
+                      </h2>
+                      {block.items.map((it, j) => (
+                        <div key={j} style={{ position: 'relative', maxWidth: 760, margin: '0 auto 16px', textAlign: 'left', borderBottom: '1px solid #eee', paddingBottom: 16 }}>
+                          {itemMenu(i, j, false)}
+                          <h3 style={{ fontSize: 18, margin: '0 0 6px', color: bg ? '#fff' : '#111' }}>
+                            <Editable value={it.question} placeholder="(question)" fontSize={18} onSave={(v) => saveField(`layout.${i}.items.${j}.question`, v)} />
+                          </h3>
+                          <p style={{ fontSize: 15, color: bg ? '#ddd' : '#555', margin: 0, lineHeight: 1.6 }}>
+                            <Editable value={it.answer} placeholder="(answer)" fontSize={15} onSave={(v) => saveField(`layout.${i}.items.${j}.answer`, v)} />
+                          </p>
+                        </div>
+                      ))}
+                      {editMode && <button onClick={() => addItem(i)} disabled={busy} title="Add a question" style={{ marginTop: 8, padding: '12px 18px', borderRadius: 10, border: '1px dashed #bbb', background: '#fafafa', color: '#555', cursor: busy ? 'default' : 'pointer', fontSize: 14 }}>+ Add question</button>}
+                    </div>
+                  </section>
+                )
+              }
+              if (block.type === 'pricing') {
+                return (
+                  <section key={i} style={{ position: 'relative', padding: '56px 48px', textAlign: 'center', background: bg ? '#222' : '#fafafa', ...bgStyle }}>
+                    {overlay}
+                    {sectionMenu(i, current.layout.length, !!bg)}
+                    <div style={{ position: 'relative', zIndex: 1 }}>
+                      <h2 style={{ fontSize: 30, margin: '0 0 36px', color: bg ? '#fff' : '#111' }}>
+                        <Editable value={block.heading} placeholder="(pricing heading)" fontSize={30} onSave={(v) => saveField(`layout.${i}.heading`, v)} />
+                      </h2>
+                      <div style={{ display: 'flex', gap: 24, justifyContent: 'center', flexWrap: 'wrap', alignItems: 'stretch' }}>
+                        {block.items.map((p, j) => (
+                          <div key={j} style={{ position: 'relative', flex: '1 1 240px', maxWidth: 300, background: '#fff', border: p.highlighted === 'true' ? `2px solid ${accent}` : '1px solid #eee', borderRadius: 12, padding: 28, textAlign: 'left', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+                            {itemMenu(i, j, false, [p.highlighted === 'true' ? { label: 'Remove highlight', onClick: () => saveField(`layout.${i}.items.${j}.highlighted`, '') } : { label: 'Highlight (recommended)', onClick: () => saveField(`layout.${i}.items.${j}.highlighted`, 'true') }])}
+                            <h3 style={{ fontSize: 20, margin: '0 0 8px', color: '#111' }}>
+                              <Editable value={p.name} placeholder="(plan name)" fontSize={20} onSave={(v) => saveField(`layout.${i}.items.${j}.name`, v)} />
+                            </h3>
+                            <div style={{ margin: '0 0 16px' }}>
+                              <span style={{ fontSize: 32, fontWeight: 700, color: '#111' }}>
+                                <Editable value={p.price} placeholder="($)" fontSize={32} onSave={(v) => saveField(`layout.${i}.items.${j}.price`, v)} />
+                              </span>
+                              <span style={{ fontSize: 14, color: '#888' }}>
+                                <Editable value={p.period} placeholder="(/mo)" fontSize={14} onSave={(v) => saveField(`layout.${i}.items.${j}.period`, v)} />
+                              </span>
+                            </div>
+                            <div style={{ fontSize: 14, color: '#555', whiteSpace: 'pre-line', marginBottom: 16, lineHeight: 1.7 }}>
+                              <Editable value={p.features} placeholder="(one feature per line)" fontSize={14} onSave={(v) => saveField(`layout.${i}.items.${j}.features`, v)} />
+                            </div>
+                            {p.buttonLabel && (
+                              <span style={{ display: 'block', textAlign: 'center', padding: '10px 0', borderRadius: 8, background: p.highlighted === 'true' ? accent : '#111', color: '#fff', fontSize: 14, fontWeight: 600 }}>
+                                <Editable value={p.buttonLabel} placeholder="(button)" fontSize={14} onSave={(v) => saveField(`layout.${i}.items.${j}.buttonLabel`, v)} />
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                        {editMode && <button onClick={() => addItem(i)} disabled={busy} title="Add a plan" style={{ alignSelf: 'center', padding: '12px 18px', borderRadius: 10, border: '1px dashed #bbb', background: '#fafafa', color: '#555', cursor: busy ? 'default' : 'pointer', fontSize: 14 }}>+ Add plan</button>}
+                      </div>
+                    </div>
+                  </section>
+                )
+              }
+              if (block.type === 'logos') {
+                return (
+                  <section key={i} style={{ position: 'relative', padding: '48px', textAlign: 'center', background: bg ? '#222' : '#fff', ...bgStyle }}>
+                    {overlay}
+                    {sectionMenu(i, current.layout.length, !!bg)}
+                    <div style={{ position: 'relative', zIndex: 1 }}>
+                      <h2 style={{ fontSize: 20, margin: '0 0 28px', fontWeight: 600, color: bg ? '#fff' : '#888' }}>
+                        <Editable value={block.heading} placeholder="(logos heading)" fontSize={20} onSave={(v) => saveField(`layout.${i}.heading`, v)} />
+                      </h2>
+                      <div style={{ display: 'flex', gap: 40, justifyContent: 'center', flexWrap: 'wrap', alignItems: 'center' }}>
+                        {block.items.map((it, j) => (
+                          <div key={j} style={{ position: 'relative' }}>
+                            {itemMenu(i, j, !!it.imageUrl)}
+                            {it.imageUrl ? (
+                              <img src={it.imageUrl} alt={it.alt} style={{ maxHeight: 48, maxWidth: 140, objectFit: 'contain' }} />
+                            ) : (
+                              <div style={{ height: 48, width: 100, background: '#f1f1f1', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bbb', fontSize: 12 }}>Logo</div>
+                            )}
+                          </div>
+                        ))}
+                        {editMode && <button onClick={() => addItem(i)} disabled={busy} title="Add a logo" style={{ alignSelf: 'center', padding: '10px 16px', borderRadius: 10, border: '1px dashed #bbb', background: '#fafafa', color: '#555', cursor: busy ? 'default' : 'pointer', fontSize: 14 }}>+ Add logo</button>}
+                      </div>
+                    </div>
+                  </section>
+                )
+              }
               return (
                 <section key={i} style={{ position: 'relative', padding: '48px', textAlign: 'center', background: bg ? '#222' : undefined, ...bgStyle }}>
                   {overlay}
@@ -987,7 +1114,11 @@ const SECTION_CHOICES: { type: string; label: string }[] = [
   { type: 'hero', label: 'Hero' },
   { type: 'features', label: 'Features' },
   { type: 'products', label: 'Products' },
+  { type: 'gallery', label: 'Gallery' },
+  { type: 'pricing', label: 'Pricing' },
+  { type: 'faq', label: 'FAQ' },
   { type: 'testimonials', label: 'Testimonials' },
+  { type: 'logos', label: 'Logos' },
   { type: 'cta', label: 'Call to action' },
   { type: 'contact', label: 'Contact' },
   { type: 'richText', label: 'Text' },
@@ -997,7 +1128,11 @@ const SECTION_LABEL: Record<string, string> = {
   hero: 'Hero',
   features: 'Features',
   products: 'Products',
+  gallery: 'Gallery',
+  pricing: 'Pricing',
+  faq: 'FAQ',
   testimonials: 'Testimonials',
+  logos: 'Logos',
   cta: 'Call to action',
   contact: 'Contact',
   richText: 'Text',

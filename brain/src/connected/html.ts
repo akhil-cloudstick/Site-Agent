@@ -185,6 +185,8 @@ export function applyContent(html: string, content: ContentMap, opts: { editor?:
     // counting that could drift from the server.
     const body = (root.querySelector('body') as HTMLElement) ?? root
     ;(body.querySelectorAll('a, button') as HTMLElement[]).forEach((el, i) => el.setAttribute('data-sa-link', String(i)))
+    // Stamp images too, so "Add link" on a bare <img> can target the exact one server-side.
+    ;(body.querySelectorAll('img') as HTMLElement[]).forEach((el, i) => el.setAttribute('data-sa-img', String(i)))
   }
   let result = root.toString()
   if (opts.editor) {
@@ -307,36 +309,66 @@ const EDITOR_SCRIPT = `<script>(function(){
     if(L){var idx=linkIndex(L),lname=((L.textContent||'').replace(/\\s+/g,' ').trim()).slice(0,40);
       rows.push({label:'Set link / redirect\\u2026',onClick:function(){post({saSetLink:{index:idx,href:L.getAttribute('href')||'',name:lname}});}});
       rows.push({label:'Add a link/button after this',onClick:function(){post({saAddAfter:{index:idx,name:lname}});}});}
+    else if(kind==='image'&&el.getAttribute('data-sa-img')!==null){var ii=parseInt(el.getAttribute('data-sa-img'),10);rows.push({label:'Add link\\u2026',onClick:function(){post({saLinkImage:{imgIndex:ii}});}});}
     // 4) item reorder/duplicate/remove — only for an owned item; else a plain link gets Remove
     if(I)rows=rows.concat(itemRows(I,true));
     else if(L){var idx2=linkIndex(L),lname2=((L.textContent||'').replace(/\\s+/g,' ').trim()).slice(0,40);rows.push({label:'Remove this',onClick:function(){post({saRemoveEl:{index:idx2,name:lname2}});}});}
     return rows;
   }
 
-  // The MOST SPECIFIC editable or item under the pointer: an editable text/image if we're on
-  // one, else the repeated item (card / icon / nav link) whose own area we're over. This is
-  // what scopes the menu — a card's text gets text options, the card itself gets card options.
-  function hoverTarget(t){if(!t||!t.closest)return null;var ed=t.closest('[data-sa-id]');if(ed)return ed;return t.closest('[data-sa-item]');}
+  // The MOST SPECIFIC editable / item / link under the pointer: an editable text/image if we're
+  // on one, else the repeated item (card / icon / nav link), else a standalone link or button
+  // (a lone icon-link or a clickable card that isn't a repeated item — still gets Set link /
+  // Remove etc.). This scopes the menu — a card's text gets text options, the card its own.
+  function hoverTarget(t){
+    if(!t||!t.closest)return null;
+    var ed=t.closest('[data-sa-id]');if(ed)return ed;
+    var item=t.closest('[data-sa-item]');if(item)return item;
+    var lk=t.closest('a,button');if(lk&&!(lk.getAttribute&&lk.getAttribute('data-sa-ui')))return lk; // lone icon-link / clickable card
+    return null;
+  }
+  // An editable's resting outline is the subtle DASH (a "you can edit this" cue); everything
+  // else has none. The HOVERED element gets the SOLID focus ring — one at a time.
   function baseOutline(el){return el&&el.getAttribute&&el.getAttribute('data-sa-id')!==null?DASH:'';}
+  function applyHover(el){
+    if(el===hovered)return;
+    if(hovered&&hovered.style)hovered.style.outline=baseOutline(hovered); // restore the last one's resting state
+    hovered=el;if(el&&el.style){el.style.outline=SOLID;el.style.outlineOffset='2px';}
+    place();
+  }
+  // End the current hover WITHOUT orphaning its ring (used on scroll / click-away). Forgetting
+  // to clear here was what left multiple solid rings stuck on the page.
+  function clearHover(){if(hovered&&hovered.style)hovered.style.outline=baseOutline(hovered);hovered=null;place();}
+  // HOVER-INTENT: switch the badge to a new element only once the pointer SETTLES on it (~150ms).
+  // So a pointer travelling from a text to its slightly-offset ⋮ badge — crossing the card or a
+  // sibling on the way — never steals the badge before you can click it (badge position unchanged).
+  var hoverTimer=null;
   document.addEventListener('mouseover',function(e){
     if(!active)return;
-    if(e.target&&e.target.closest&&e.target.closest('[data-sa-ui]'))return; // over our own badge/menu — keep current
+    if(e.target&&e.target.closest&&e.target.closest('[data-sa-ui]')){clearTimeout(hoverTimer);return;} // on our badge/menu → keep current, cancel pending switch
+    clearTimeout(hoverTimer);
     var el=hoverTarget(e.target);
-    if(!el||el===hovered)return; // empty space → keep the last badge so it's still reachable
-    if(hovered&&hovered.style)hovered.style.outline=baseOutline(hovered);
-    hovered=el;if(el.style){el.style.outline=SOLID;el.style.outlineOffset='2px';}
-    place();
+    if(!el||el===hovered)return; // empty space / same element → keep the current badge
+    if(!hovered){applyHover(el);return;} // nothing shown yet → show immediately
+    hoverTimer=setTimeout(function(){applyHover(el);},150); // moving → only switch once the pointer settles
   });
 
   function setActive(on){
     active=on;
-    items.forEach(function(el){el.style.outline=on?DASH:'';el.style.outlineOffset='2px';if(on&&getComputedStyle(el).cursor==='auto')el.style.cursor='pointer';});
-    if(!on){if(hovered&&hovered.style)hovered.style.outline=baseOutline(hovered);hovered=null;closeMenu();}
+    if(on){
+      // Editables get the subtle dashed cue; the hovered one gets the solid ring (applyHover).
+      items.forEach(function(el){el.style.outline=DASH;el.style.outlineOffset='2px';if(getComputedStyle(el).cursor==='auto')el.style.cursor='pointer';});
+    } else {
+      // Edit mode OFF → remove EVERY focus ring we set (editables, the hovered card/link, any
+      // straggler), so nothing lingers on the page. Outlines are only ever set by us inline.
+      [].slice.call(document.querySelectorAll('[style*="outline"]')).forEach(function(el){el.style.outline='';el.style.outlineOffset='';});
+      hovered=null;closeMenu();
+    }
     place();
   }
   window.addEventListener('message',function(e){if(e.data&&typeof e.data.saEditMode==='boolean')setActive(e.data.saEditMode);});
   // On scroll: dismiss the open menu AND hide the ⋮ badge (it reappears on the next hover).
-  window.addEventListener('scroll',function(){closeMenu();hovered=null;place();},true);
+  window.addEventListener('scroll',function(){closeMenu();clearHover();},true);
   window.addEventListener('resize',place);
 
   // One capture-phase click handler for the whole page.
@@ -365,7 +397,7 @@ const EDITOR_SCRIPT = `<script>(function(){
         return;
       }
       // Clicked empty / non-editable space → dismiss the menu and the ⋮ badge.
-      closeMenu();hovered=null;place();
+      closeMenu();clearHover();
       return;
     }
 

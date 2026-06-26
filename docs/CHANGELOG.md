@@ -1,6 +1,32 @@
 # Changelog
 
+## 2026-06-26
+
+**`10:15 AM`** — connected chat: every action shows the request bubble, not just the reply
+- Deterministic edits (add/remove a button, set link / redirect, add a link after, link an image, move/duplicate/remove a card, move/delete a section) now echo a **"you" request bubble** before the buffering skeleton + result — matching the AI "Add a section" flow. Previously these jumped straight to the reply, so the chat looked one-sided. `elementOp` takes a request message (all call sites updated); the item + section handlers emit one too.
+
+**`09:55 AM`** — connected sites: nav highlights the current page on ANY site, incl. AI-built pages
+- A **global, render-time** normaliser makes the nav highlight only the page you're on — for every connected site, never by editing stored HTML, and **without knowing the site's class names**. It anchors on the standard **`aria-current="page"`** to learn the site's *own* active vs inactive menu-link class **strings**, then re-applies those whole strings (current link → active + `aria-current`; other menu links → inactive). Whole-string copy preserves the site's **exact styling/shape** (the earlier attempt guessed individual classes and grabbed a shape class → broke the rounded boxes; gone). The **logo and CTA are excluded by class-shape**.
+- **Fix for AI-built pages specifically:** an AI-generated page can end up with **no `aria-current` and no active link at all**, so it had nothing to anchor on and stayed un-highlighted (while a manually-added page, which inherited a real active link from the page it cloned, worked). Now the active/inactive styles are **learned ONCE from whichever page still has the anchor** (`detectNavStyles`) and applied to **every** page — so a page that lost its anchor (AI-built, or cloned by the editor) now highlights its own link correctly too. Applied in preview and on publish; stored markup untouched.
+
 ## 2026-06-25
+
+**`11:55 PM`** — connected editor: one solid focus ring at a time; nav highlighting left to the site
+- **Editables keep the subtle dashed cue; only ONE solid focus ring shows at a time.** The dashed "you can edit this" outline is back (it's useful), and the bright solid ring follows only the hovered element. The "multiple stuck rings" bug is fixed: **scroll / click-away now clears the ring** instead of orphaning it (forgetting that left a solid ring on every element you'd hovered). Turning **edit mode off clears everything**; published sites never show rings.
+- **Nav highlighting is now left to the connected site itself (no guessing).** An earlier attempt auto-detected the "active" class and re-applied it per page — but on a site that highlights with a bespoke class, that guess grabbed a styling class and changed the nav's *shape/layout*. Reverted entirely: SiteAgent **never detects or re-applies** a site's highlight class, at preview or publish, so different sites keep their own behaviour. The only nav touch-up is **standard cleanup on a CLONE** — a newly added link or a newly cloned page has `aria-current` and the conventional `active`/`current`/`selected` classes stripped so it doesn't inherit "I'm the current page." A site's own CSS/JS highlighting is untouched. _(Heal an already-polluted link/page by removing & re-adding it; that re-clones it clean.)_
+- **Nav-link rename now propagates to pages added later.** A page created *after* you renamed a nav button cloned the **old** label (clones came from the raw stored HTML, which a rename only updates in the draft layer). New pages now clone from the source page **with current edits applied**, so renamed labels (and swapped images/text) carry over. _(An already-stale label on an existing page: click it and rename once to re-sync.)_
+
+**`11:30 PM`** — connected editor: badge reachability + more cards/icons editable + chat auto-scroll
+- **The ⋮ badge no longer slips away when you reach for it.** It sits just outside an element, so moving the pointer to click it used to cross the card/a sibling and steal the hover. Now it uses **hover-intent** — it only switches to a new element once the pointer *settles* (~150ms), so a pointer travelling to the badge keeps it put (badge positions unchanged).
+- **Varied card grids are now fully detected.** A bento/feature grid that mixes classes (`card`, `card large`, `card wide`) only showed badges on the identical cards; now siblings that **share any class** group together, so **every** card gets a badge — and hovering its icon falls back to the card's **Edit with AI** (which can change the icon).
+- **Lone icon-links / clickable cards get a menu.** The badge now also targets a standalone `<a>`/`<button>` (a single social icon, an icon button, a clickable card that isn't part of a grid) — Set link · Add after · Remove (+ reorder/duplicate when it's in a group).
+- **Chat sticks to the bottom.** The chat (connected editor **and** builder) now auto-scrolls to the latest message on load and whenever a reply or the buffering skeleton appears — no more scrolling down to find the response.
+
+**`11:00 PM`** — ✅ Phase 2 fully complete — builder gallery/FAQ/pricing/logos + connected follow-ups
+- **Four new builder section types** ("Create from scratch"): **Gallery** (image grid + captions), **FAQ** (question/answer list), **Pricing** (plan cards — price, period, per-line features, "highlight recommended", CTA), and **Logos** (logo strip). Each is a proper typed block: structured fields, AI can compose them (strict intent allowlist), inline-editable in the builder, and they render in both the live preview and the published static site. New Postgres migration `20260625_171745_new_section_blocks` (purely additive) applied; types regenerated.
+- This closes the last Phase 2 checklist item, **"Gallery + more section types."** (Connected sites already offered these via the AI "+ Add section".)
+- **Connected follow-ups done too:** a scripted end-to-end **verify runner** (`verify-structure-connected.ts` — 17 checks: detect → move/delete/insert/replace sections → reorder/duplicate/remove items → draft-remap survives → add/remove page + nav link), and **"Add link" on a bare image** (wraps a standalone `<img>`/logo in a link, via a server-stamped `data-sa-img` index — also repaired the field route so products/all item fields are directly editable).
+- 132 unit tests green; typecheck clean.
 
 **`10:10 PM`** — ✅ Phase 2 (Structural editing) is complete for connected sites — `m14-structural` marked done
 - **What this milestone covers, end-to-end on an external connected site:**

@@ -47,6 +47,49 @@ function blockHtml(b: PreviewBlock, accent: string): string {
         .join('')
       return wrap(`<h2 style="font-size:30px;margin:0 0 36px;color:${bg ? '#fff' : '#111'}">${esc(b.heading)}</h2><div style="display:flex;gap:24px;justify-content:center;flex-wrap:wrap;align-items:flex-start">${cards}</div>`, `position:relative;padding:64px 48px;text-align:center;background:${bg ? '#222' : '#fff'};${bgCss}`)
     }
+    case 'gallery': {
+      const cells = b.items
+        .map(
+          (it) =>
+            `<figure style="flex:1 1 200px;max-width:300px;margin:0">${it.imageUrl ? `<img src="${esc(it.imageUrl)}" alt="${esc(it.caption)}" style="width:100%;height:200px;object-fit:cover;display:block;border-radius:10px">` : `<div style="width:100%;height:200px;background:#eee;border-radius:10px"></div>`}${it.caption ? `<figcaption style="font-size:13px;color:#666;margin-top:8px">${esc(it.caption)}</figcaption>` : ''}</figure>`,
+        )
+        .join('')
+      return wrap(`<h2 style="font-size:30px;margin:0 0 36px;color:${bg ? '#fff' : '#111'}">${esc(b.heading)}</h2><div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap">${cells}</div>`, `position:relative;padding:64px 48px;text-align:center;background:${bg ? '#222' : '#fff'};${bgCss}`)
+    }
+    case 'faq': {
+      const rows = b.items
+        .map(
+          (it) =>
+            `<div style="max-width:760px;margin:0 auto 16px;text-align:left;border-bottom:1px solid #eee;padding-bottom:16px"><h3 style="font-size:18px;margin:0 0 6px;color:${bg ? '#fff' : '#111'}">${esc(it.question)}</h3><p style="font-size:15px;color:${bg ? '#ddd' : '#555'};margin:0;line-height:1.6">${esc(it.answer)}</p></div>`,
+        )
+        .join('')
+      return wrap(`<h2 style="font-size:30px;margin:0 0 36px;color:${bg ? '#fff' : '#111'}">${esc(b.heading)}</h2>${rows}`, `position:relative;padding:64px 48px;text-align:center;background:${bg ? '#222' : '#fafafa'};${bgCss}`)
+    }
+    case 'pricing': {
+      const cards = b.items
+        .map((p) => {
+          const hot = p.highlighted === 'true'
+          const feats = (p.features || '')
+            .split('\n')
+            .map((f) => f.trim())
+            .filter(Boolean)
+            .map((f) => `<li style="font-size:14px;color:#555;margin:6px 0">${esc(f)}</li>`)
+            .join('')
+          const btn = p.buttonLabel ? `<span style="display:block;text-align:center;padding:10px 0;border-radius:8px;background:${hot ? esc(accent) : '#111'};color:#fff;font-size:14px;font-weight:600;margin-top:16px">${esc(p.buttonLabel)}</span>` : ''
+          return `<div style="flex:1 1 240px;max-width:300px;background:#fff;border:${hot ? `2px solid ${esc(accent)}` : '1px solid #eee'};border-radius:12px;padding:28px;text-align:left;box-shadow:0 2px 8px rgba(0,0,0,0.06)"><h3 style="font-size:20px;margin:0 0 8px">${esc(p.name)}</h3><div style="margin:0 0 16px"><span style="font-size:32px;font-weight:700">${esc(p.price)}</span><span style="font-size:14px;color:#888">${esc(p.period)}</span></div><ul style="list-style:none;padding:0;margin:0">${feats}</ul>${btn}</div>`
+        })
+        .join('')
+      return wrap(`<h2 style="font-size:30px;margin:0 0 36px;color:${bg ? '#fff' : '#111'}">${esc(b.heading)}</h2><div style="display:flex;gap:24px;justify-content:center;flex-wrap:wrap;align-items:stretch">${cards}</div>`, `position:relative;padding:64px 48px;text-align:center;background:${bg ? '#222' : '#fafafa'};${bgCss}`)
+    }
+    case 'logos': {
+      const cells = b.items
+        .map(
+          (it) =>
+            `<div style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;height:48px">${it.imageUrl ? `<img src="${esc(it.imageUrl)}" alt="${esc(it.alt)}" style="max-height:48px;max-width:140px;object-fit:contain;filter:grayscale(1);opacity:.7">` : `<span style="color:#bbb;font-size:13px">${esc(it.alt || 'Logo')}</span>`}</div>`,
+        )
+        .join('')
+      return wrap(`${b.heading ? `<h2 style="font-size:20px;margin:0 0 28px;color:${bg ? '#fff' : '#888'};font-weight:600">${esc(b.heading)}</h2>` : ''}<div style="display:flex;gap:40px;justify-content:center;flex-wrap:wrap;align-items:center">${cells}</div>`, `position:relative;padding:48px;text-align:center;background:${bg ? '#222' : '#fff'};${bgCss}`)
+    }
     case 'cta':
       return wrap(`<h2 style="font-size:30px;margin:0 0 22px;color:#fff">${esc(b.heading)}</h2><span style="display:inline-block;padding:12px 28px;border-radius:8px;background:${esc(accent)};color:#fff;font-size:16px">${esc(b.buttonLabel)}</span>`, `position:relative;padding:72px 48px;text-align:center;background:#111;color:#fff;${bgCss}`)
     case 'contact':
