@@ -6,6 +6,7 @@ import { requireWritableTenant } from '@/auth/requireTenant'
 import { cloudflareConfigured, deployToCloudflare } from '@/publish/deploy-cloudflare'
 import { exportSite } from '@/publish/export-site'
 import { publishTenantPages, saveTenantLiveUrl } from '@/publish/publish'
+import { logTenantError } from '@/operator/errorLog'
 
 /** POST /workspace/publish — freeze the current drafts as the published site,
  *  and (if Cloudflare is configured) deploy it to a real public URL. */
@@ -31,6 +32,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     // Keep the full (noisy) deploy output in the server log; show the customer a short message.
     console.error('[publish] failed:', err)
+    await logTenantError(tenantId, 'publish_workspace', err)
     return NextResponse.json({ ok: false, message: 'Publishing failed. Please try again.' }, { status: 500 })
   }
 }

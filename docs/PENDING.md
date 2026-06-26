@@ -85,9 +85,9 @@ _Things we deliberately simplified or postponed so the build stays vertical-slic
 
 ## Operator admin panel (m11) — v1 done, follow-ups owed _(2026-06-24)_
 - [x] ~~**Operator dashboard (read-only).**~~ **Done (2026-06-24):** `/workspace/operator` — operator-gated (`isOperator`) cross-tenant overview: tenants + their connected sites (name, source, pages, live URL, status), member count, running jobs, and totals (tenants/sites/published/active jobs). Reads via the broker with operator scope. Code: `src/operator/dashboard.ts`, `app/(frontend)/workspace/operator/*`.
-- [ ] **Tenant actions** — suspend/resume, edit plan, remove a tenant from the panel (currently read-only; manage via Payload `/admin`).
+- [x] ~~**Tenant actions** — suspend/resume, edit plan, remove a tenant from the panel~~ **Done (2026-06-26):** suspend/resume (a suspended tenant's members are locked out — login rejected with "account suspended" + sent to the sign-in page), set a free-text **plan label**, and a typed-slug-confirmed **remove** (cascade delete of sites/pages/changesets/media/jobs/error-logs + local folders, an **opt-in checkbox to also delete the Cloudflare project**, and a "Suspend instead" softer path). `src/operator/manageTenant.ts` + `removeTenant.ts`, `app/(frontend)/admin/tenants/[id]/{status,plan,remove}`.
 - [ ] **Billing & roles** (`m11-roles-open`) — plans/usage-based billing + multi-user team roles (who-can-publish) are still unspecified; decide before real teams.
-- [ ] **Usage history** — current panel shows live counts only; per-tenant usage over time (edits/publishes/storage) for billing comes later.
+- [x] ~~**Usage history** — current panel shows live counts only~~ **Done (2026-06-26):** live per-tenant totals + **last-30-day** counts (publishes, media + storage MB, tasks done/failed, errors) on the tenant detail page; **per-model AI usage** with progress bars on `/admin/settings`; a tenant **error log** at `/admin/errors` (merges logged failures + failed jobs). Time-series usage-over-time for billing is still later.
 - [ ] **`m11-github-app`** (per-repo installation tokens) + **`m11-secrets`** (all GitHub/Cloudflare/Payload secrets server-side only) — unbuilt; secrets currently in `brain/.env`.
 
 ### Admin dashboard + route restructure + impersonation — shipped 2026-06-24 (built, plan grilled + Codex-reviewed)
@@ -99,12 +99,13 @@ _Things we deliberately simplified or postponed so the build stays vertical-slic
 - [x] ~~View-only UI affordance hiding is partial~~ **Done (2026-06-24):** the block builder **and** the connected editor now hide the chat box, click-to-edit, Edit-mode toggle, and every write action for a view-only operator (server 403 unchanged — the UI now matches it).
 - [x] ~~Impersonation attribution is a log line, not durable~~ **Done (2026-06-24):** `impersonatedBy` (operator user id) is persisted on the active ChangeSet across every content-write path (the write itself still runs as the tenant's service principal). Full append-only audit stays owed under `m2-audit`.
 - [x] ~~`OperatorClient.tsx` dead code~~ **Done (2026-06-24):** deleted (`/workspace/operator` still redirects to `/admin`).
-- [ ] **Tenant actions** (suspend/resume, edit plan, remove from the panel) and **billing** remain deferred as before.
+- [x] ~~**Tenant actions** (suspend/resume, edit plan, remove from the panel)~~ **Done (2026-06-26)** — see the m11 section above. **Billing** + multi-user team roles remain deferred.
 
 ## Remaining LOCAL polish (no accounts needed)
 - [x] **`pages` NOT NULL hardening** (`m2-fk-constraints`): **Done 2026-06-20** — migration `20260620_120000_pages_not_null` sets `NOT NULL` on `pages.tenant_id` + `pages.change_set_id_id`; verified seed + structure write paths still pass.
 - [x] **Product cards section**: **Done 2026-06-20** — `products` block (image, name, price, oldPrice, badge, button); AI-composable, verified.
-- [ ] **Real token streaming** (`m6-sse`): a clean animated "working" indicator now shows while the AI runs, but true token/micro-state streaming (Thinking → Applying → Updating preview) over SSE is still pending.
+- [x] ~~**Real token streaming** (`m6-sse`)~~ **Done (2026-06-26):** both AI chat routes (connected + builder) stream **real backend stages** — Thinking → Asking the AI → Applying → Updating the preview → Done — as an NDJSON `ReadableStream`; the chat skeleton shows the live stage instead of a fake timer. Raw token-by-token streaming is intentionally out of scope (the model returns JSON edits, not prose).
+- [x] **Responsive layout** (`m13-responsive`) **Done (2026-06-26):** on narrow screens (≤768px) both editors collapse the side-by-side split to **Chat ⇄ Preview tabs** (splitter hidden, chat full-width); the admin gets a collapsing sidebar (sticky full-height on desktop) + horizontally scrollable tables. `src/app/(frontend)/workspace/useIsMobile.ts`.
 - [x] ~~**More section types (builder typed-blocks)**: gallery, FAQ, pricing, logos.~~ **Done (2026-06-25):** all four added as first-class builder blocks — `gallery` (image grid + captions), `faq` (Q/A), `pricing` (plan cards with price/period/per-line features/highlight/CTA), `logos` (logo strip). Wired through `blocks.ts`, intent allowlist, content-agent prompt, builder structure/defaults, layout→preview, `PreviewBlock` types, the React render + `SECTION_CHOICES`, the static `render-html.ts`, and the field-edit route; migration `20260625_171745_new_section_blocks` applied. Closes the last Phase 2 checklist item.
 
 ## Design/Layout: dynamic blocks now; formal registry later

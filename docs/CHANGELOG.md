@@ -2,6 +2,17 @@
 
 ## 2026-06-26
 
+**`3:30 PM`** — Phase 4 (admin/operator) + Phase 5 (polish) shipped
+- **Suspend / resume a tenant** — operators can pause an account from the dashboard or its detail page. A suspended member is **sent to the sign-in page**, and a login attempt is **rejected with "Your account has been suspended"** (just like a wrong password — the session cookie is never set); impersonation stays blocked. Resume restores access.
+- **Remove a tenant** — a typed-slug-confirmed deletion that cascades sites, pages, changesets, media, jobs and error logs plus the local site folders, with an **opt-in checkbox** to also delete the Cloudflare project (default off — leaves the live site up) and a **"Suspend instead"** softer path.
+- **Plan label** — set a free-text plan ("Free"/"Pro"…) per tenant; shown on the dashboard + detail.
+- **Usage (light)** — each tenant's detail shows live totals + last-30-day counts (publishes, media + storage MB, tasks done/failed, errors), every card with a hover tooltip explaining it. (Fixed a wrong metric: "Publishes" counted *published changesets* — always 0 — and now counts real publish jobs.)
+- **Per-model usage** — `/admin/settings` shows a **progress bar per model** (share of calls) with call / fail / token counts, recorded after each AI call (OpenRouter's token usage is no longer discarded); a "reset usage" link zeroes it. A live **Active / No-API-key / No-model** status badge shows whether the agent is configured (persists across refresh).
+- **Error log** — a new **/admin/errors** page lists every failure a tenant hit — *what they tried (with a plain-English description) and why it failed* — **merging logged failures (connect, publish, page-create, AI overload, …) with failed background tasks** (connect/publish/delete jobs, including older ones), newest first. Each tenant's detail page shows its recent errors.
+- **Real AI progress streaming** — the chat no longer shows a fake timed status; both chat routes stream the **actual** backend stages (Thinking → Asking the AI → Applying → Updating → Done) as the work happens.
+- **Responsive layout** — on narrow screens both editors collapse the side-by-side split to **Chat ⇄ Preview tabs** (splitter hidden, chat full-width); the admin gets a **sticky full-height sidebar** that collapses to a top bar on mobile + horizontally scrollable tables.
+- _Schema:_ one batched migration (`20260626_092541_phase4_admin`) added `planLabel` and the `modelUsage` + `errorLogs` tables. Telemetry (`logTenantError`, `recordModelUsage`) is best-effort and never breaks a request.
+
 **`2:10 PM`** — connected sites: nav add AND remove now sync across desktop + mobile (the real path)
 - The earlier nav-sync fix lived in `applyElementOp`, but a nav link is a **shared component**, so the live route actually goes through `applyElementOpInComponent` (element path) / `applyItemOpInComponent` (item path) — which **never called the sync**. That's why, even after a dev-server restart, a new button (`testButton`) still only hit the desktop bar and a removed button stayed in the hamburger.
 - Centralised the menu sync into one helper and wired it into **both** shared paths, for **add AND remove**: adding a nav link fills every menu list (desktop + mobile drawer); **removing one now clears it from every menu list too** (it previously only removed the clicked copy). The logo/CTA are still never touched (shape detection); removal matches by `href` and skips the logo so removing "Home" never deletes the brand logo.

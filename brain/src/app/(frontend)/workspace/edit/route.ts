@@ -5,6 +5,7 @@ import { detectNewPageIntent } from '@/agent/intent'
 import { requireWritableTenant } from '@/auth/requireTenant'
 import { addTenantPage } from '@/workspace/create-page'
 import { loadWorkspaceDto } from '@/workspace/preview'
+import { logTenantError } from '@/operator/errorLog'
 
 /** POST /workspace/edit — the chat endpoint. Auth from the session cookie,
  *  tenant derived server-side, the edit applied through the broker/agent. */
@@ -37,28 +38,43 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, message: 'Tell me what to change.' }, { status: 400 })
   }
 
-  // "add a new page X" creates a page rather than editing the current one. Skip
-  // this when pointing at a section or attaching a reference image — those are
-  // clearly edits to the page in view, not page creation.
-  if (typeof targetIndex !== 'number' && !imageDataUrl) {
-    const pageIntent = detectNewPageIntent(message)
-    if (pageIntent) {
+  // Stream REAL progress stages (Thinking → Updating → Done) as NDJSON so the chat reflects
+  // what's actually happening; the terminal {stage:'done', …} carries the fresh workspace.
+  const encoder = new TextEncoder()
+  const stream = new ReadableStream({
+    async start(controller) {
+      const emit = (obj: unknown) => controller.enqueue(encoder.encode(JSON.stringify(obj) + '\n'))
       try {
-        const created = (await addTenantPage(tenantId, pageIntent.title, undefined, guard.tenant!.operatorUserId)) as any
-        const workspace = await loadWorkspaceDto(tenantId, created.id)
-        return NextResponse.json({
-          ok: true,
-          message: `Added a new page “${created.title}” — you're now editing it. Tell me what to put on it.`,
-          workspace,
-        })
-      } catch {
-        return NextResponse.json({ ok: false, message: "I couldn't create that page — nothing was changed." })
-      }
-    }
-  }
+        emit({ stage: 'thinking' })
+        // "add a new page X" creates a page rather than editing the current one. Skip this when
+        // pointing at a section or attaching a reference image — those are clearly edits.
+        if (typeof targetIndex !== 'number' && !imageDataUrl) {
+          const pageIntent = detectNewPageIntent(message)
+          if (pageIntent) {
+            try {
+              const created = (await addTenantPage(tenantId, pageIntent.title, undefined, guard.tenant!.operatorUserId)) as any
+              emit({ stage: 'updating' })
+              const workspace = await loadWorkspaceDto(tenantId, created.id)
+              emit({ stage: 'done', ok: true, message: `Added a new page “${created.title}” — you're now editing it. Tell me what to put on it.`, workspace })
+            } catch (err) {
+              await logTenantError(tenantId, 'create_page', err, { detail: `title: ${pageIntent.title}` })
+              emit({ stage: 'done', ok: false, message: "I couldn't create that page — nothing was changed." })
+            }
+            return
+          }
+        }
 
-  const result = await runContentEdit(tenantId, pageId, message, imageDataUrl, targetIndex, guard.tenant!.operatorUserId)
-  // Return the fresh workspace so the client updates without a full refresh.
-  const workspace = result.ok ? await loadWorkspaceDto(tenantId, pageId) : undefined
-  return NextResponse.json({ ...result, workspace })
+        const result = await runContentEdit(tenantId, pageId, message, imageDataUrl, targetIndex, guard.tenant!.operatorUserId)
+        if (!result.ok) await logTenantError(tenantId, 'edit_content', result.message, { detail: `request: ${message.slice(0, 200)}` })
+        emit({ stage: 'updating' })
+        const workspace = result.ok ? await loadWorkspaceDto(tenantId, pageId) : undefined
+        emit({ stage: 'done', ...result, workspace })
+      } catch {
+        emit({ stage: 'done', ok: false, message: 'Something went wrong — nothing was changed.' })
+      } finally {
+        controller.close()
+      }
+    },
+  })
+  return new Response(stream, { headers: { 'content-type': 'application/x-ndjson; charset=utf-8', 'cache-control': 'no-store' } })
 }

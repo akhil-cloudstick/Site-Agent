@@ -48,6 +48,27 @@ async function fetchProjectHost(accountId: string, token: string, project: strin
   }
 }
 
+/**
+ * Delete a Cloudflare Pages project (used by tenant removal when the operator opts in).
+ * Best-effort: returns true on success / already-gone (404), false on any other failure —
+ * a deletion failure must not abort the rest of the tenant cleanup.
+ */
+export async function deleteCloudflareProject(project: string): Promise<boolean> {
+  const env = getEnv()
+  if (!env.cloudflareAccountId || !env.cloudflareApiToken) return false
+  const name = sanitizeProject(project)
+  if (!name) return false
+  try {
+    const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${env.cloudflareAccountId}/pages/projects/${name}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${env.cloudflareApiToken}` },
+    })
+    return res.ok || res.status === 404
+  } catch {
+    return false
+  }
+}
+
 /** Deploy a static folder to a Cloudflare Pages project by its exact name (creating it
  *  on first deploy). Shared by both the builder and connected-site publishing.
  *  `onChild` lets a job register the spawned wrangler process so cancel can kill it. */

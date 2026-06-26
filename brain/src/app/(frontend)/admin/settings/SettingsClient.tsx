@@ -2,12 +2,16 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 
+import type { ModelUsageRow } from '@/agent/recordModelUsage'
+
 interface AvailableModel {
   id: string
   name: string
 }
 
-export function SettingsClient({ models: initialModels, keySet }: { models: string[]; keySet: boolean }) {
+const kTokens = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n))
+
+export function SettingsClient({ models: initialModels, keySet, usage }: { models: string[]; keySet: boolean; usage: ModelUsageRow[] }) {
   const [models, setModels] = useState<string[]>(initialModels.length ? initialModels : [])
   const [available, setAvailable] = useState<AvailableModel[]>([])
   const [loadingModels, setLoadingModels] = useState(true)
@@ -15,9 +19,12 @@ export function SettingsClient({ models: initialModels, keySet }: { models: stri
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const [apiKey, setApiKey] = useState('')
+  const [keyIsSet, setKeyIsSet] = useState(keySet) // tracks the SAVED key state (survives until refresh)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
+  // The agent is usable only when a key is saved AND at least one model is configured.
+  const active = keyIsSet && models.length > 0
   const pickerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -77,12 +84,26 @@ export function SettingsClient({ models: initialModels, keySet }: { models: stri
       const d = await res.json().catch(() => null)
       if (res.ok && d?.ok) {
         setMsg('Saved.')
+        if (apiKey.trim()) setKeyIsSet(true) // a new key was just saved → reflect "set" immediately
         setApiKey('')
       } else setErr(d?.message || 'Could not save.')
     } catch {
       setErr('Could not save.')
     }
     setBusy(false)
+  }
+
+  const usageByModel = useMemo(() => {
+    const m = new Map<string, ModelUsageRow>()
+    for (const u of usage) m.set(u.model, u)
+    return m
+  }, [usage])
+  const totalCalls = useMemo(() => usage.reduce((s, u) => s + (u.calls || 0), 0), [usage])
+
+  async function resetUsage() {
+    if (!confirm('Reset all model usage counters to zero?')) return
+    await fetch('/admin/settings/usage/reset', { method: 'POST' }).catch(() => null)
+    window.location.reload()
   }
 
   const label: React.CSSProperties = { fontSize: 13, color: '#475569', marginBottom: 6, fontWeight: 600 }
@@ -92,7 +113,19 @@ export function SettingsClient({ models: initialModels, keySet }: { models: stri
       <h1 style={{ fontSize: 22, margin: '0 0 18px', textAlign: 'center' }}>Settings</h1>
 
       <section style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
-        <div style={{ fontSize: 15, fontWeight: 700 }}>AI agent</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ fontSize: 15, fontWeight: 700 }}>AI agent</div>
+          {/* Live status: green "Active" when a key is saved AND a model is configured. */}
+          <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, padding: '3px 10px', borderRadius: 999, background: active ? '#dcfce7' : '#fef9c3', color: active ? '#166534' : '#854d0e' }}>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: active ? '#22c55e' : '#d97706' }} />
+            {active ? 'Active' : !keyIsSet ? 'No API key' : 'No model selected'}
+          </span>
+        </div>
+        {!active && (
+          <div style={{ fontSize: 12, color: '#854d0e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '8px 10px', marginTop: -8 }}>
+            Add an API key and at least one model, then Save, to activate the AI agent.
+          </div>
+        )}
 
         {/* 1 — Provider */}
         <div>
@@ -102,23 +135,48 @@ export function SettingsClient({ models: initialModels, keySet }: { models: stri
 
         {/* 2 — API key */}
         <div>
-          <div style={label}>API key {keySet && <span style={{ color: '#166534', fontWeight: 400 }}>— set ✓</span>}</div>
-          <input value={apiKey} onChange={(e) => setApiKey(e.target.value)} type="password" placeholder={keySet ? 'Enter a new key to replace' : 'OpenRouter API key (sk-or-…)'} autoComplete="off" style={inp} />
+          <div style={label}>API key {keyIsSet && <span style={{ color: '#166534', fontWeight: 400 }}>— set ✓</span>}</div>
+          <input value={apiKey} onChange={(e) => setApiKey(e.target.value)} type="password" placeholder={keyIsSet ? 'Enter a new key to replace' : 'OpenRouter API key (sk-or-…)'} autoComplete="off" style={inp} />
         </div>
 
-        {/* 3 — Models (chosen list, then a + Add model dropdown) */}
+        {/* 3 — Models (chosen list with usage bars, then a + Add model dropdown) */}
         <div>
-          <div style={label}>Models</div>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <div style={label}>Models</div>
+            {totalCalls > 0 && (
+              <button onClick={resetUsage} title="Zero the usage counters" style={{ marginLeft: 'auto', marginBottom: 6, fontSize: 12, background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+                reset usage
+              </button>
+            )}
+          </div>
 
-          {/* Chosen models — appear above the Add button */}
+          {/* Chosen models — each with a usage progress bar (share of total calls) */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
-            {models.map((m, i) => (
-              <div key={m} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, background: '#f8fafc' }}>
-                <span style={{ color: '#94a3b8', width: 16 }}>{i + 1}.</span>
-                <span style={{ flex: 1 }}>{m}</span>
-                <button onClick={() => setModels(models.filter((x) => x !== m))} style={{ fontSize: 12, padding: '3px 10px', borderRadius: 999, border: '1px solid #fecaca', background: '#fff', color: '#b42318', cursor: 'pointer' }}>remove</button>
-              </div>
-            ))}
+            {models.map((m, i) => {
+              const u = usageByModel.get(m)
+              const calls = u?.calls ?? 0
+              const fails = u?.fails ?? 0
+              const share = totalCalls > 0 ? Math.round((calls / totalCalls) * 100) : 0
+              const tok = (u?.promptTokens ?? 0) + (u?.completionTokens ?? 0)
+              return (
+                <div key={m} style={{ fontSize: 13, padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, background: '#f8fafc' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ color: '#94a3b8', width: 16 }}>{i + 1}.</span>
+                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m}</span>
+                    <button onClick={() => setModels(models.filter((x) => x !== m))} style={{ fontSize: 12, padding: '3px 10px', borderRadius: 999, border: '1px solid #fecaca', background: '#fff', color: '#b42318', cursor: 'pointer' }}>remove</button>
+                  </div>
+                  {/* Usage bar — share of total successful calls; plus calls · fails · tokens */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                    <div style={{ flex: 1, height: 7, borderRadius: 999, background: '#e5e7eb', overflow: 'hidden' }}>
+                      <div style={{ width: `${share}%`, height: '100%', background: fails > calls ? '#f59e0b' : '#2563eb', borderRadius: 999, transition: 'width .3s' }} />
+                    </div>
+                    <span style={{ fontSize: 11, color: '#64748b', whiteSpace: 'nowrap' }}>
+                      {calls} calls{fails ? ` · ${fails} fail${fails === 1 ? '' : 's'}` : ''}{tok ? ` · ${kTokens(tok)} tok` : ''}
+                    </span>
+                  </div>
+                </div>
+              )
+            })}
           </div>
 
           {/* + Add model — opens a dropdown with the real available models */}

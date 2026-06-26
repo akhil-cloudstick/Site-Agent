@@ -1,4 +1,5 @@
 import { getAiApiKey, getModelConfig } from './aiSettings'
+import { recordModelUsage } from './recordModelUsage'
 
 /**
  * Minimal OpenRouter chat client (OpenAI-compatible). Tries the configured
@@ -57,17 +58,22 @@ export async function chat(
       if (!res.ok) {
         const body = await res.text().catch(() => '')
         errors.push(`${model}: HTTP ${res.status} ${body.slice(0, 200)}`)
+        void recordModelUsage(model, { ok: false })
         continue
       }
       const data: any = await res.json()
       const content = data?.choices?.[0]?.message?.content
       if (typeof content !== 'string' || content.trim() === '') {
         errors.push(`${model}: empty response`)
+        void recordModelUsage(model, { ok: false })
         continue
       }
+      // Record the win + token usage (OpenRouter returns data.usage). Fire-and-forget.
+      void recordModelUsage(model, { ok: true, promptTokens: data?.usage?.prompt_tokens, completionTokens: data?.usage?.completion_tokens })
       return { model, content }
     } catch (e: any) {
       errors.push(`${model}: ${e?.name === 'AbortError' ? `timed out after ${Math.round(perModelMs / 1000)}s` : e?.message ?? String(e)}`)
+      void recordModelUsage(model, { ok: false })
     } finally {
       clearTimeout(timer)
     }

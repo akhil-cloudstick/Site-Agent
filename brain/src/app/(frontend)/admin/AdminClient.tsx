@@ -58,6 +58,17 @@ export function AdminClient({ data }: { data: OperatorDashboardDto }) {
     setBusy(false)
   }
 
+  async function toggleStatus(id: number, current: string) {
+    const next = current === 'suspended' ? 'active' : 'suspended'
+    if (next === 'suspended' && !confirm('Suspend this tenant? Its members will be locked out until you resume it.')) return
+    const res = await fetch(`/admin/tenants/${id}/status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: next }),
+    }).catch(() => null)
+    if (res?.ok) window.location.reload()
+  }
+
   const th: React.CSSProperties = { textAlign: 'left', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.04em', color: '#94a3b8', padding: '0 12px 8px', fontWeight: 600 }
   const td: React.CSSProperties = { padding: '12px', fontSize: 14, borderTop: '1px solid #eef2f7', verticalAlign: 'middle' }
 
@@ -80,12 +91,13 @@ export function AdminClient({ data }: { data: OperatorDashboardDto }) {
         <Card label="Active jobs" value={data.totals.activeJobs} />
       </div>
 
-      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '16px 8px 8px' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '16px 8px 8px', overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720 }}>
           <thead>
             <tr>
               <th style={th}>Tenant</th>
               <th style={th}>Status</th>
+              <th style={th}>Plan</th>
               <th style={th}>Members</th>
               <th style={th}>Sites</th>
               <th style={th}>Published</th>
@@ -96,7 +108,7 @@ export function AdminClient({ data }: { data: OperatorDashboardDto }) {
           </thead>
           <tbody>
             {data.tenants.length === 0 && (
-              <tr><td style={td} colSpan={8}>No tenants yet. Add your first one.</td></tr>
+              <tr><td style={td} colSpan={9}>No tenants yet. Add your first one.</td></tr>
             )}
             {data.tenants.map((t) => (
               <tr key={t.id}>
@@ -105,12 +117,22 @@ export function AdminClient({ data }: { data: OperatorDashboardDto }) {
                   <div style={{ fontSize: 12, color: '#94a3b8' }}>/{t.slug}</div>
                 </td>
                 <td style={td}><StatusBadge status={t.status} /></td>
+                <td style={td}>{t.planLabel ? <span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 999, background: '#eef2ff', color: '#3730a3', fontWeight: 600 }}>{t.planLabel}</span> : <span style={{ color: '#cbd5e1' }}>—</span>}</td>
                 <td style={td}>{t.members}</td>
                 <td style={td}>{t.sites.length}</td>
                 <td style={td}>{t.sites.filter((s) => s.liveUrl).length}</td>
                 <td style={td}>{t.activeJobs}</td>
                 <td style={td}>{t.allowOperatorEdit ? <span style={{ color: '#166534' }}>editable</span> : <span style={{ color: '#94a3b8' }}>view-only</span>}</td>
-                <td style={{ ...td, textAlign: 'right' }}><EnterButton tenantId={t.id} /></td>
+                <td style={{ ...td, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                  <button
+                    onClick={() => toggleStatus(t.id, t.status)}
+                    title={t.status === 'suspended' ? 'Resume this tenant' : 'Suspend this tenant'}
+                    style={{ marginRight: 8, fontSize: 13, padding: '6px 10px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: t.status === 'suspended' ? '#166534' : '#b91c1c', cursor: 'pointer', fontWeight: 600 }}
+                  >
+                    {t.status === 'suspended' ? 'Resume' : 'Suspend'}
+                  </button>
+                  <EnterButton tenantId={t.id} />
+                </td>
               </tr>
             ))}
           </tbody>

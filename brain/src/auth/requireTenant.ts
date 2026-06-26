@@ -23,6 +23,9 @@ export async function requireWritableTenant(
   if (!eff.user) {
     return { response: NextResponse.json({ ok: false, message: 'Please log in.' }, { status: 401 }) }
   }
+  if (eff.suspended) {
+    return { response: NextResponse.json({ ok: false, message: 'This account is suspended. Contact support.' }, { status: 403 }) }
+  }
   if (eff.tenantId === undefined) {
     return {
       response: NextResponse.json(
@@ -48,6 +51,7 @@ export async function requireReadableTenant(
 ): Promise<{ tenantId?: number; response?: NextResponse }> {
   const eff = await resolveEffectiveTenant(reqHeaders)
   if (!eff.user) return { response: NextResponse.json({ ok: false }, { status: 401 }) }
+  if (eff.suspended) return { response: NextResponse.json({ ok: false, message: 'This account is suspended.' }, { status: 403 }) }
   if (eff.tenantId === undefined) return { response: NextResponse.json({ ok: false }, { status: 403 }) }
   return { tenantId: eff.tenantId }
 }

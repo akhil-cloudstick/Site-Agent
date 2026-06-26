@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 
+import { readChatStream, stageLabel } from './chatStream'
+import { useIsMobile } from './useIsMobile'
 import { Drawer } from './Drawer'
 import { DrawerLauncher } from './DrawerLauncher'
 import { DrawerIcons, DrawerRow, drawerSectionHead } from './DrawerRow'
@@ -11,17 +13,18 @@ type JobType = 'connect' | 'publish' | 'delete'
 const SKELETON = '__skeleton__'
 const CHAT_STAGES = ['Reading the page…', 'Asking the AI…', 'Designing it…', 'Styling it to look great…', 'Almost there…']
 
-/** A shimmering placeholder reply, shown while the AI works (with a looping status — so a
- *  longer build like a full page never looks frozen). */
-function SkeletonReply() {
+/** A shimmering placeholder reply. Shows the REAL streamed stage when given, else a looping
+ *  status (so a longer build never looks frozen). */
+function SkeletonReply({ stage }: { stage?: string | null }) {
   const [i, setI] = useState(0)
   useEffect(() => {
+    if (stage) return // real backend stage → no timer
     const id = setInterval(() => setI((x) => (x + 1) % CHAT_STAGES.length), 1600)
     return () => clearInterval(id)
-  }, [])
+  }, [stage])
   return (
     <div style={{ alignSelf: 'flex-start', maxWidth: '85%', padding: '10px 12px', borderRadius: 12, background: '#fff', border: '1px solid #e2e2e2', minWidth: 180 }}>
-      <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8 }}>{CHAT_STAGES[i]}</div>
+      <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8 }}>{stage || CHAT_STAGES[i]}</div>
       {[92, 78, 64].map((w, k) => (
         <div key={k} style={{ height: 9, width: `${w}%`, borderRadius: 6, marginBottom: k === 2 ? 0 : 7, background: 'linear-gradient(90deg,#eceff3 25%,#f6f8fa 37%,#eceff3 63%)', backgroundSize: '400% 100%', animation: 'saShimmer 1.4s ease infinite' }} />
       ))}
@@ -235,6 +238,9 @@ export function ConnectedEditor({
   // Width of the chat panel in px; drag the divider to resize chat vs. preview (like the builder).
   const [chatWidth, setChatWidth] = useState(360)
   const [resizing, setResizing] = useState(false) // drag in progress → overlay swallows iframe events
+  const [streamStage, setStreamStage] = useState<string | null>(null) // live AI progress stage (B1)
+  const isMobile = useIsMobile() // narrow screens → Chat⇄Preview tabs instead of side-by-side (B2)
+  const [mobileTab, setMobileTab] = useState<'chat' | 'preview'>('preview')
 
   function startResize(e: React.MouseEvent) {
     e.preventDefault()
@@ -651,19 +657,21 @@ export function ConnectedEditor({
       /* ignore a bad image */
     }
     setRefImage(null)
+    setStreamStage(stageLabel('thinking'))
     try {
       const res = await fetch('/workspace/connected/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ siteId: activeId, path: activePath, message, refImage: refImageUrl }),
       })
-      const data = await res.json()
+      const data = await readChatStream(res, (stage) => setStreamStage(stageLabel(stage)))
       replaceSkeleton(data.message ?? 'Done.')
       if (data.ok && data.count > 0) bumpPaths(Array.isArray(data.paths) && data.paths.length ? data.paths : [activePath])
     } catch {
       replaceSkeleton('Something went wrong. Please try again.')
     } finally {
       setBusy(false)
+      setStreamStage(null)
     }
   }
 
@@ -1301,12 +1309,26 @@ export function ConnectedEditor({
   pagesRef.current = pages
 
   return (
-    <div style={{ display: 'flex', height: '100%', fontFamily: 'system-ui, sans-serif', color: '#111' }}>
+    <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', height: '100%', fontFamily: 'system-ui, sans-serif', color: '#111' }}>
       {/* While dragging the splitter, this transparent overlay sits above the preview iframes so
           the cursor never enters them — otherwise the iframe eats mousemove and the drag sticks. */}
       {resizing && <div style={{ position: 'fixed', inset: 0, zIndex: 9999, cursor: 'col-resize' }} />}
+      {/* Narrow screens: a Chat | Preview tab switch instead of the side-by-side split. */}
+      {isMobile && (
+        <div style={{ flex: 'none', display: 'flex', borderBottom: '1px solid #e2e2e2', background: '#fff' }}>
+          {(['chat', 'preview'] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setMobileTab(t)}
+              style={{ flex: 1, padding: '10px 0', border: 'none', borderBottom: mobileTab === t ? '2px solid #2563eb' : '2px solid transparent', background: 'transparent', color: mobileTab === t ? '#2563eb' : '#64748b', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}
+            >
+              {t === 'chat' ? 'Chat' : 'Preview'}
+            </button>
+          ))}
+        </div>
+      )}
       {/* Left panel — the conversation. Site controls live in the drawer (☰). */}
-      <div style={{ width: chatWidth, flex: 'none', display: 'flex', flexDirection: 'column', background: '#fafafa' }}>
+      <div style={{ width: isMobile ? '100%' : chatWidth, flex: isMobile ? 1 : 'none', minHeight: 0, display: isMobile && mobileTab !== 'chat' ? 'none' : 'flex', flexDirection: 'column', background: '#fafafa' }}>
         {/* Conversation (same bubble style as the builder) */}
         <div ref={chatScrollRef} style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
           {messages.length === 0 && active && (
@@ -1321,7 +1343,7 @@ export function ConnectedEditor({
           )}
           {messages.map((m, i) =>
             m.text === SKELETON ? (
-              <SkeletonReply key={i} />
+              <SkeletonReply key={i} stage={streamStage} />
             ) : (
               <div
                 key={i}
@@ -1421,15 +1443,17 @@ export function ConnectedEditor({
         )}
       </div>
 
-      {/* Drag to resize the chat vs. preview split (same as the builder). */}
-      <div
-        onMouseDown={startResize}
-        title="Drag to resize"
-        style={{ width: 6, flex: 'none', cursor: 'col-resize', background: '#e2e2e2', borderRight: '1px solid #d4d4d4' }}
-      />
+      {/* Drag to resize the chat vs. preview split (same as the builder). Hidden on mobile (tabs). */}
+      {!isMobile && (
+        <div
+          onMouseDown={startResize}
+          title="Drag to resize"
+          style={{ width: 6, flex: 'none', cursor: 'col-resize', background: '#e2e2e2', borderRight: '1px solid #d4d4d4' }}
+        />
+      )}
 
       {/* Preview — page tabs + Undo + edit-mode toggle, then address bar */}
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#fff' }}>
+      <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: isMobile && mobileTab !== 'preview' ? 'none' : 'flex', flexDirection: 'column', overflow: 'hidden', background: '#fff' }}>
         {active ? (
           <>
             {/* Toolbar row: page tabs · Undo. (Live URL + Edit-mode toggle live in the top bar.) */}

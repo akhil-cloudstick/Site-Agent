@@ -74,6 +74,8 @@ export interface Config {
     pages: Page;
     connectedSites: ConnectedSite;
     jobs: Job;
+    modelUsage: ModelUsage;
+    errorLogs: ErrorLog;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -88,6 +90,8 @@ export interface Config {
     pages: PagesSelect<false> | PagesSelect<true>;
     connectedSites: ConnectedSitesSelect<false> | ConnectedSitesSelect<true>;
     jobs: JobsSelect<false> | JobsSelect<true>;
+    modelUsage: ModelUsageSelect<false> | ModelUsageSelect<true>;
+    errorLogs: ErrorLogsSelect<false> | ErrorLogsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -183,6 +187,10 @@ export interface Tenant {
    * Allow a platform operator to edit this site while impersonating.
    */
   allowOperatorEdit?: boolean | null;
+  /**
+   * Plan label shown on the operator dashboard.
+   */
+  planLabel?: string | null;
   liveUrl?: string | null;
   githubRepo?: string | null;
   deployTargets?:
@@ -585,6 +593,36 @@ export interface Job {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "modelUsage".
+ */
+export interface ModelUsage {
+  id: number;
+  model: string;
+  calls?: number | null;
+  fails?: number | null;
+  promptTokens?: number | null;
+  completionTokens?: number | null;
+  lastUsedAt?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "errorLogs".
+ */
+export interface ErrorLog {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  action: string;
+  message: string;
+  detail?: string | null;
+  siteId?: number | null;
+  userId?: number | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
 export interface PayloadKv {
@@ -634,6 +672,14 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'jobs';
         value: number | Job;
+      } | null)
+    | ({
+        relationTo: 'modelUsage';
+        value: number | ModelUsage;
+      } | null)
+    | ({
+        relationTo: 'errorLogs';
+        value: number | ErrorLog;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -735,6 +781,7 @@ export interface TenantsSelect<T extends boolean = true> {
   slug?: T;
   status?: T;
   allowOperatorEdit?: T;
+  planLabel?: T;
   liveUrl?: T;
   githubRepo?: T;
   deployTargets?: T;
@@ -1011,6 +1058,34 @@ export interface JobsSelect<T extends boolean = true> {
   error?: T;
   result?: T;
   finishedAt?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "modelUsage_select".
+ */
+export interface ModelUsageSelect<T extends boolean = true> {
+  model?: T;
+  calls?: T;
+  fails?: T;
+  promptTokens?: T;
+  completionTokens?: T;
+  lastUsedAt?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "errorLogs_select".
+ */
+export interface ErrorLogsSelect<T extends boolean = true> {
+  tenant?: T;
+  action?: T;
+  message?: T;
+  detail?: T;
+  siteId?: T;
+  userId?: T;
   updatedAt?: T;
   createdAt?: T;
 }

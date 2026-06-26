@@ -5,6 +5,7 @@ import { planConnectedPage, planConnectedSection } from '@/connected/agent'
 import { fetchPageHtml } from '@/connected/fetch'
 import { getConnectedSite } from '@/connected/store'
 import { getItemHtml, getMainInnerHtml, getSectionHtml, sampleSiteClasses } from '@/connected/structure'
+import { logTenantError } from '@/operator/errorLog'
 
 /**
  * POST /workspace/connected/generate — generate a section or a whole page's content as
@@ -71,11 +72,16 @@ export async function POST(req: NextRequest) {
     theme,
   }
 
+  const action = mode === 'page' ? 'generate_page' : 'generate_section'
   try {
     const res = mode === 'page' ? await planConnectedPage(opts) : await planConnectedSection(opts)
-    if (!res.ok) return NextResponse.json({ ok: false, message: `Couldn’t generate that (${res.error}).` }, { status: 400 })
+    if (!res.ok) {
+      await logTenantError(tenantId, action, res.error, { siteId, detail: opts.request })
+      return NextResponse.json({ ok: false, message: `Couldn’t generate that (${res.error}).` }, { status: 400 })
+    }
     return NextResponse.json({ ok: true, mode, html: res.html, message: res.message ?? 'Here’s a draft — keep it or discard.' })
   } catch (err) {
+    await logTenantError(tenantId, action, err, { siteId, detail: opts.request })
     return NextResponse.json({ ok: false, message: err instanceof Error ? err.message : 'Could not generate.' }, { status: 500 })
   }
 }

@@ -28,6 +28,8 @@ export const Tenants: CollectionConfig = {
       defaultValue: false,
       admin: { description: 'Allow a platform operator to edit this site while impersonating.' },
     },
+    // Operator-set plan label (free text, e.g. "Free" / "Pro"). Display-only in v1.
+    { name: 'planLabel', type: 'text', admin: { description: 'Plan label shown on the operator dashboard.' } },
     // The published site's public URL (set on a successful Cloudflare publish).
     { name: 'liveUrl', type: 'text' },
     // Set later by real provisioning (Module 3); unused in slice 1.

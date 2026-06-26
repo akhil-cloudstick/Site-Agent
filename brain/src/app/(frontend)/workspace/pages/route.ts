@@ -4,6 +4,7 @@ import { deleteTenantPage, listTenantPages } from '@/broker/adapter'
 import { requireReadableTenant, requireWritableTenant } from '@/auth/requireTenant'
 import { addTenantPage } from '@/workspace/create-page'
 import { loadWorkspaceDto } from '@/workspace/preview'
+import { logTenantError } from '@/operator/errorLog'
 
 /** GET /workspace/pages?pageId=N — load a specific page (used when switching pages). */
 export async function GET(req: NextRequest) {
@@ -36,7 +37,8 @@ export async function POST(req: NextRequest) {
     const created = (await addTenantPage(tenantId, title, navLabel, guard.tenant!.operatorUserId)) as any
     const workspace = await loadWorkspaceDto(tenantId, created.id)
     return NextResponse.json({ ok: true, newPageId: created.id, workspace })
-  } catch {
+  } catch (err) {
+    await logTenantError(tenantId, 'create_page', err, { detail: `title: ${title}` })
     return NextResponse.json({ ok: false, message: 'Could not create the page.' }, { status: 500 })
   }
 }
@@ -67,7 +69,8 @@ export async function DELETE(req: NextRequest) {
     const nextId = (remaining.find((p: any) => p.slug === 'home') ?? remaining[0])?.id
     const workspace = await loadWorkspaceDto(tenantId, nextId)
     return NextResponse.json({ ok: true, workspace })
-  } catch {
+  } catch (err) {
+    await logTenantError(tenantId, 'delete_page', err, { detail: `pageId: ${pageId}` })
     return NextResponse.json({ ok: false, message: 'Could not delete the page.' }, { status: 500 })
   }
 }

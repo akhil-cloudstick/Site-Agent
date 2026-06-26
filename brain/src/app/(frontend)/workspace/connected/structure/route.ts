@@ -3,6 +3,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { requireWritableTenant } from '@/auth/requireTenant'
 import { applyStructureToPage } from '@/connected/store'
 import type { SectionOp } from '@/connected/structure'
+import { logTenantError } from '@/operator/errorLog'
 
 /**
  * POST /workspace/connected/structure — move or delete a top-level section on a
@@ -35,6 +36,7 @@ export async function POST(req: NextRequest) {
     if (!res.ok) return NextResponse.json({ ok: false, message: res.message ?? 'Could not apply that change.' }, { status: 400 })
     return NextResponse.json({ ok: true, paths: res.paths, skipped: res.skipped })
   } catch (err) {
+    await logTenantError(tenantId, 'edit_structure', err, { siteId })
     return NextResponse.json({ ok: false, message: err instanceof Error ? err.message : 'Could not apply that change.' }, { status: 500 })
   }
 }

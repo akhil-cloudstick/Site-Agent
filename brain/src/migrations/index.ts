@@ -23,6 +23,7 @@ import * as migration_20260623_101221_jobs from './20260623_101221_jobs';
 import * as migration_20260624_074100_admin_impersonation_settings from './20260624_074100_admin_impersonation_settings';
 import * as migration_20260624_113229_impersonation_attribution from './20260624_113229_impersonation_attribution';
 import * as migration_20260625_171745_new_section_blocks from './20260625_171745_new_section_blocks';
+import * as migration_20260626_092541_phase4_admin from './20260626_092541_phase4_admin';
 
 export const migrations = [
   {
@@ -148,6 +149,11 @@ export const migrations = [
   {
     up: migration_20260625_171745_new_section_blocks.up,
     down: migration_20260625_171745_new_section_blocks.down,
-    name: '20260625_171745_new_section_blocks'
+    name: '20260625_171745_new_section_blocks',
+  },
+  {
+    up: migration_20260626_092541_phase4_admin.up,
+    down: migration_20260626_092541_phase4_admin.down,
+    name: '20260626_092541_phase4_admin'
   },
 ];

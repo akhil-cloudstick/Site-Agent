@@ -7,6 +7,8 @@ const EditModeContext = createContext(true)
 
 import type { CurrentPage, PageSummary, WorkspaceDto } from '@/workspace/types'
 
+import { readChatStream, stageLabel } from './chatStream'
+import { useIsMobile } from './useIsMobile'
 import type { ConnectedSiteSummary } from './ConnectedEditor'
 import { Drawer } from './Drawer'
 import { DrawerLauncher } from './DrawerLauncher'
@@ -21,18 +23,21 @@ interface Msg {
 const CHAT_KEY = 'siteagent.workspace.chat'
 const TYPING = '__typing__'
 
-/** Animated three-dot "the AI is working" indicator. */
-function TypingDots() {
+/** Animated "the AI is working" indicator — shows the REAL streamed stage when given, else dots. */
+function TypingDots({ stage }: { stage?: string | null }) {
   const [n, setN] = useState(0)
   useEffect(() => {
     const id = setInterval(() => setN((x) => (x + 1) % 3), 350)
     return () => clearInterval(id)
   }, [])
   return (
-    <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center', padding: '2px 0' }}>
-      {[0, 1, 2].map((i) => (
-        <span key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: '#9ca3af', opacity: n === i ? 1 : 0.3, transition: 'opacity .2s' }} />
-      ))}
+    <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center', padding: '2px 0' }}>
+      {stage && <span style={{ fontSize: 12, color: '#94a3b8' }}>{stage}</span>}
+      <span style={{ display: 'inline-flex', gap: 5 }}>
+        {[0, 1, 2].map((i) => (
+          <span key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: '#9ca3af', opacity: n === i ? 1 : 0.3, transition: 'opacity .2s' }} />
+        ))}
+      </span>
     </span>
   )
 }
@@ -73,6 +78,9 @@ export function WorkspaceClient({
   onTopBar?: (c: { liveUrl: string | null; editMode: boolean; onToggleEdit: () => void; showToggle: boolean }) => void
 }) {
   const [messages, setMessages] = useState<Msg[]>([GREETING])
+  const [streamStage, setStreamStage] = useState<string | null>(null) // live AI progress stage (B1)
+  const isMobile = useIsMobile() // narrow screens → Chat⇄Preview tabs instead of side-by-side (B2)
+  const [mobileTab, setMobileTab] = useState<'chat' | 'preview'>('preview')
   const [pages, setPages] = useState<PageSummary[]>(initial.pages)
   const [current, setCurrent] = useState<CurrentPage | null>(initial.current)
   const [input, setInput] = useState('')
@@ -208,6 +216,7 @@ export function WorkspaceClient({
     setRefImage(null)
     if (chatRef.current) chatRef.current.style.height = 'auto'
     setBusy(true)
+    setStreamStage(stageLabel('thinking'))
     setMessages((m) => [...m, { role: 'you', text: text || '(look at this)', badges }, { role: 'agent', text: TYPING }])
     try {
       const fd = new FormData()
@@ -217,13 +226,14 @@ export function WorkspaceClient({
       if (sentImage) fd.append('image', sentImage)
       setTarget(null)
       const res = await fetch('/workspace/edit', { method: 'POST', body: fd })
-      const data = await res.json()
+      const data = await readChatStream(res, (stage) => setStreamStage(stageLabel(stage)))
       setMessages((m) => [...m.slice(0, -1), { role: 'agent', text: data.message ?? 'Done.' }])
       if (data.ok) applyWorkspace(data.workspace) // update without a refresh
     } catch {
       setMessages((m) => [...m.slice(0, -1), { role: 'agent', text: 'Something went wrong — nothing was changed.' }])
     } finally {
       setBusy(false)
+      setStreamStage(null)
     }
   }
 
@@ -469,7 +479,7 @@ export function WorkspaceClient({
   }
 
   return (
-    <div style={{ display: 'flex', height: '100%', fontFamily: 'system-ui, sans-serif', color: '#111' }}>
+    <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', height: '100%', fontFamily: 'system-ui, sans-serif', color: '#111' }}>
       {/* The command drawer (☰): launcher (New + History) + Publish. */}
       <Drawer open={drawerOpen} onClose={onCloseDrawer} title="Workspace">
         <DrawerLauncher
@@ -497,8 +507,23 @@ export function WorkspaceClient({
         {profile}
       </Drawer>
 
+      {/* Narrow screens: a Chat | Preview tab switch instead of the side-by-side split. */}
+      {isMobile && (
+        <div style={{ flex: 'none', display: 'flex', borderBottom: '1px solid #e2e2e2', background: '#fff' }}>
+          {(['chat', 'preview'] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setMobileTab(t)}
+              style={{ flex: 1, padding: '10px 0', border: 'none', borderBottom: mobileTab === t ? '2px solid #2563eb' : '2px solid transparent', background: 'transparent', color: mobileTab === t ? '#2563eb' : '#64748b', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}
+            >
+              {t === 'chat' ? 'Chat' : 'Preview'}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Chat */}
-      <div style={{ width: chatWidth, flex: 'none', display: 'flex', flexDirection: 'column', background: '#fafafa' }}>
+      <div style={{ width: isMobile ? '100%' : chatWidth, flex: isMobile ? 1 : 'none', minHeight: 0, display: isMobile && mobileTab !== 'chat' ? 'none' : 'flex', flexDirection: 'column', background: '#fafafa' }}>
         <div ref={chatScrollRef} style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
           {messages.map((m, i) => (
             <div
@@ -527,7 +552,7 @@ export function WorkspaceClient({
                   ))}
                 </div>
               )}
-              {m.text === TYPING ? <TypingDots /> : m.text}
+              {m.text === TYPING ? <TypingDots stage={streamStage} /> : m.text}
             </div>
           ))}
         </div>
@@ -591,15 +616,17 @@ export function WorkspaceClient({
         )}
       </div>
 
-      {/* Drag to resize the chat vs. preview split. */}
-      <div
-        onMouseDown={startResize}
-        title="Drag to resize"
-        style={{ width: 6, flex: 'none', cursor: 'col-resize', background: '#e2e2e2', borderRight: '1px solid #d4d4d4' }}
-      />
+      {/* Drag to resize the chat vs. preview split. Hidden on mobile (tabs). */}
+      {!isMobile && (
+        <div
+          onMouseDown={startResize}
+          title="Drag to resize"
+          style={{ width: 6, flex: 'none', cursor: 'col-resize', background: '#e2e2e2', borderRight: '1px solid #d4d4d4' }}
+        />
+      )}
 
       {/* Live preview of the draft */}
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#fff' }}>
+      <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: isMobile && mobileTab !== 'preview' ? 'none' : 'flex', flexDirection: 'column', overflow: 'hidden', background: '#fff' }}>
         {/* Page switcher */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderBottom: '1px solid #eee', flexWrap: 'wrap' }}>
           {pages.map((p) => {

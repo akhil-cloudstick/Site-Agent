@@ -42,6 +42,7 @@ export type EffectiveTenantAction =
   | 'redirect-admin' // operator with no impersonation → /admin
   | 'clear-cookie-redirect-admin' // operator, stale/invalid cookie tenant → clear + /admin
   | 'clear-cookie-resolve-tenant' // non-operator still holding a cookie → clear + use their own tenant
+  | 'tenant-suspended' // the member's own tenant is suspended → show the suspended screen, block writes
 
 export interface EffectiveTenant {
   user: User | null
@@ -50,6 +51,8 @@ export interface EffectiveTenant {
   canEdit: boolean
   operatorUserId?: number
   action: EffectiveTenantAction
+  /** The member's tenant is suspended (operator-set). Read routes/pages must block. */
+  suspended?: boolean
 }
 
 /**
@@ -95,6 +98,16 @@ export async function resolveEffectiveTenant(reqHeaders: Headers): Promise<Effec
 
   // Non-operator: if a stale impersonation cookie is present (role revoked), clear it.
   const tenantId = tenantIdOfUser(user)
+  // A suspended tenant's own members are locked out (the operator flipped status). Surface a
+  // dedicated screen + block writes (operator impersonation is already blocked by the
+  // status==='active' check above).
+  if (tenantId !== undefined) {
+    const payload = await getBrokerClient()
+    const tenant = await payload.findByID({ collection: 'tenants', id: tenantId, overrideAccess: true, depth: 0 }).catch(() => null)
+    if (tenant && (tenant as any).status === 'suspended') {
+      return { user, tenantId, isImpersonating: false, canEdit: false, suspended: true, action: 'tenant-suspended' }
+    }
+  }
   return {
     user,
     tenantId,

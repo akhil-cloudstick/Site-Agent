@@ -3,6 +3,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { requireWritableTenant } from '@/auth/requireTenant'
 import { applyElementToPage } from '@/connected/store'
 import type { ElementOp } from '@/connected/structure'
+import { logTenantError } from '@/operator/errorLog'
 
 /**
  * POST /workspace/connected/element — deterministic button/link edits (no AI):
@@ -43,6 +44,7 @@ export async function POST(req: NextRequest) {
     const res = await applyElementToPage(tenantId, siteId, pathname, op)
     return NextResponse.json(res, { status: res.ok ? 200 : 400 })
   } catch (err) {
+    await logTenantError(tenantId, 'edit_element', err, { siteId })
     return NextResponse.json({ ok: false, message: err instanceof Error ? err.message : 'Could not apply that change.' }, { status: 500 })
   }
 }

@@ -24,15 +24,17 @@ _All remaining work in two sections: **LOCAL** (build + test on your machine fir
 - [ ] **Attach a custom domain** to the site's Cloudflare project
 - [ ] **Show the DNS record** for the client to add + **verify Active/Pending**
 
-### Phase 4 — Admin / operator completeness
-- [ ] **Suspend / resume** a tenant
-- [ ] **Remove** a tenant (with cleanup of its sites/jobs)
-- [ ] **Set a plan label**
-- [ ] **Usage history (light)** — edits / publishes / storage over time
+### Phase 4 — Admin / operator completeness  _(✅ complete 2026-06-26)_
+- [x] **Suspend / resume** a tenant _(2026-06-26)_ — sets `Tenants.status`; a suspended tenant's own members are locked out (suspended screen + 403) and operator impersonation is blocked.
+- [x] **Remove** a tenant (with cleanup of its sites/jobs) _(2026-06-26)_ — cascade delete (sites/pages/changesets/media/jobs/error-logs + local folders), an opt-in checkbox to also delete the Cloudflare project, a "Suspend instead" softer option, and typed-slug confirmation.
+- [x] **Set a plan label** _(2026-06-26)_ — `Tenants.planLabel`, shown on the dashboard + detail.
+- [x] **Usage history (light)** _(2026-06-26)_ — live per-tenant totals + last-30-day counts (publishes, media + storage MB, jobs, errors).
+- [x] **Per-model usage** _(2026-06-26)_ — `/admin/settings` shows each model's progress bar (share of calls) + call/fail/token counts (`modelUsage` collection; `chat()` now records OpenRouter's token usage).
+- [x] **Error log** _(2026-06-26)_ — `/admin/errors` lists every failure a tenant hit (connect/publish/page-create/AI overload) with what they tried + why; captured via `logTenantError` at every seam + the job runner.
 
-### Phase 5 — Polish
-- [ ] **Token streaming** — Thinking → Applying → Updating (`m6-sse`)
-- [ ] **Mobile / responsive** layout (`m13-responsive`)
+### Phase 5 — Polish  _(✅ complete 2026-06-26)_
+- [x] **Token streaming** — Thinking → Applying → Updating (`m6-sse`) _(2026-06-26)_ — both chat routes stream REAL backend stages as NDJSON; the chat skeleton shows the live stage (no more fake timer).
+- [x] **Mobile / responsive** layout (`m13-responsive`) _(2026-06-26)_ — both editors collapse to **Chat⇄Preview tabs** on narrow screens (≤768px, splitter hidden, chat full-width); admin gets a collapsing sidebar + horizontally scrollable tables.
 
 ### Phase 6 — Pre-deploy prep (built locally, required before deploy)
 - [ ] **Move media to R2 / cloud storage** (`m10`) — builder's local-disk images break on a server

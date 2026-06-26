@@ -34,12 +34,9 @@ export async function planConnectedEdits(content: ContentMap, request: string, r
     ? ([{ type: 'text', text: userText }, { type: 'image_url', image_url: { url: refImageUrl } }] as const)
     : userText
 
-  let reply
-  try {
-    reply = await chat([{ role: 'system', content: system }, { role: 'user', content: userContent as any }], { json: true })
-  } catch {
-    return []
-  }
+  // NOTE: an AI-service failure (all models down/overloaded) THROWS so the caller can log it
+  // and tell the user; a successful-but-empty reply returns [] ("nothing to change").
+  const reply = await chat([{ role: 'system', content: system }, { role: 'user', content: userContent as any }], { json: true })
 
   let parsed: any
   try {
