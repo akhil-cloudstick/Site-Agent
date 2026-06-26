@@ -164,33 +164,91 @@ export function stripPageChrome(html: string): string {
  * <header>, then any internal link. Prefer internal links, else the last one in scope, so
  * the new link lands among the menu items (after e.g. Contact).
  */
-function navTemplateAnchor(root: HTMLElement, knownRoutes: string[]): HTMLElement | null {
-  const internal = (a: HTMLElement) => {
-    const r = routeOfHref(a.getAttribute('href'))
-    return r != null && knownRoutes.includes(r)
+// A brand LOGO link (often href="/" too) is not a menu item — it wraps an image/icon.
+const isNavLogo = (a: HTMLElement) => a.querySelector('img, svg, picture') != null
+
+/** The "list container" a menu anchor belongs to: the <ul>/<ol> for <li> items, else its parent. */
+function navContainerOf(a: HTMLElement): HTMLElement | null {
+  const p = a.parentNode as HTMLElement | null
+  if (p && tagOf(p) === 'li' && p.parentNode) return p.parentNode as HTMLElement
+  return p
+}
+
+/** True if `el` has an ancestor element whose tag is in `tags`. */
+function hasAncestorTag(el: HTMLElement, tags: string[]): boolean {
+  let p = el.parentNode as HTMLElement | null
+  while (p) {
+    if (tags.includes(tagOf(p))) return true
+    p = p.parentNode as HTMLElement | null
   }
-  // A CTA ("Contact Us" red button) is NOT a menu item — prefer plain menu links to clone.
-  const isCta = (a: HTMLElement) => /\b(btn|button|cta|primary|secondary|outline|pill|rounded)\b/i.test(a.getAttribute('class') || '')
-  const pick = (els: HTMLElement[]): HTMLElement | null => {
-    const ints = els.filter(internal)
-    const menu = ints.filter((a) => !isCta(a))
-    if (menu.length) return menu[menu.length - 1]
-    if (ints.length) return ints[ints.length - 1]
-    const plain = els.filter((a) => !isCta(a))
-    return plain.length ? plain[plain.length - 1] : els.length ? els[els.length - 1] : null
+  return false
+}
+
+/**
+ * The MENU links within one container, found by class-SHAPE majority — NOT by keyword guessing.
+ * A menu list's items share a common class signature (e.g. `rounded-md px-3 py-2.5 text-sm
+ * font-medium transition-colors`); the odd ones out — the logo (image/svg) and a CTA button (a
+ * different padding / weight / solid background) — share fewer of those tokens and drop out. This
+ * is robust across ANY site (the earlier keyword regex wrongly flagged every `rounded-md` link as
+ * a CTA, so nothing matched). Returns [] if the container isn't a real menu list (<2 menu links).
+ */
+function menuLinksInContainer(links: HTMLElement[]): HTMLElement[] {
+  const real = links.filter((a) => !isNavLogo(a))
+  if (real.length < 2) return []
+  const freq = new Map<string, number>()
+  const sets = real.map((a) => {
+    const s = new Set((a.getAttribute('class') || '').split(/\s+/).filter(Boolean))
+    for (const t of s) freq.set(t, (freq.get(t) || 0) + 1)
+    return s
+  })
+  // The shared "menu signature" = tokens common to MORE than half the links.
+  const sig = new Set([...freq].filter(([, n]) => n > real.length / 2).map(([t]) => t))
+  if (sig.size < 2) return real // no clear shared shape → treat them all as menu links
+  const need = Math.ceil(sig.size * 0.7)
+  const menu = real.filter((_, i) => [...sets[i]].filter((t) => sig.has(t)).length >= need)
+  return menu.length >= 2 ? menu : real
+}
+
+/**
+ * A responsive site renders its nav links TWICE — a desktop bar AND a separate mobile/hamburger
+ * drawer — each in its OWN list container. To add a link consistently we must touch EVERY menu
+ * list, not just one (the old bug: a new page showed in the desktop bar but not the mobile menu).
+ * Returns one `{container, template}` per distinct menu list in <nav>/<header> (skipping the
+ * footer); `template` is the last real menu link, whose styling a new item is cloned from.
+ */
+function navMenuGroups(root: HTMLElement): { container: HTMLElement; template: HTMLElement }[] {
+  const anchors = (root.querySelectorAll('nav a, header a') as HTMLElement[]).filter((a) => !hasAncestorTag(a, ['footer']))
+  const order: HTMLElement[] = []
+  const groups = new Map<HTMLElement, HTMLElement[]>()
+  for (const a of anchors) {
+    const c = navContainerOf(a)
+    if (!c) continue
+    if (!groups.has(c)) {
+      groups.set(c, [])
+      order.push(c)
+    }
+    groups.get(c)!.push(a)
   }
-  const navEl = root.querySelector('nav') as HTMLElement | null
-  if (navEl) {
-    const r = pick(navEl.querySelectorAll('a') as HTMLElement[])
-    if (r) return r
+  const result: { container: HTMLElement; template: HTMLElement }[] = []
+  for (const c of order) {
+    const menu = menuLinksInContainer(groups.get(c)!)
+    if (menu.length < 2) continue
+    result.push({ container: c, template: menu[menu.length - 1] })
   }
-  const headerEl = root.querySelector('header') as HTMLElement | null
-  if (headerEl) {
-    const r = pick(headerEl.querySelectorAll('a') as HTMLElement[])
-    if (r) return r
+  return result
+}
+
+/** Insert a new menu link styled like `tmpl`, right after it (cloning a wrapping <li> if present). */
+function addNavCloneAfter(tmpl: HTMLElement, href: string, label: string): void {
+  const cls = tmpl.getAttribute('class')
+  const anchor = `<a href="${escapeAttr(href)}"${cls ? ` class="${escapeAttr(cls)}"` : ''}>${escapeHtml(label)}</a>`
+  const parent = tmpl.parentNode as HTMLElement | null
+  if (parent && tagOf(parent) === 'li') {
+    const liCls = parent.getAttribute('class')
+    parent.insertAdjacentHTML('afterend', `<li${liCls ? ` class="${escapeAttr(liCls)}"` : ''}>${anchor}</li>`)
+  } else {
+    tmpl.insertAdjacentHTML('afterend', anchor)
   }
-  const ints = (root.querySelectorAll('a') as HTMLElement[]).filter(internal)
-  return ints.length ? ints[ints.length - 1] : null
 }
 
 export interface NavStyles {
@@ -276,7 +334,7 @@ export function normalizeNavActive(html: string, currentRoute: string, styles?: 
  * a whole <li> is cloned so the new item renders correctly. Returns the HTML unchanged if
  * no nav anchor is found (the page is still reachable by its tab/URL).
  */
-export function addNavLink(html: string, newPath: string, label: string, knownRoutes: string[]): string {
+export function addNavLink(html: string, newPath: string, label: string, _knownRoutes: string[] = []): string {
   const root = parse(html, { comment: true })
   // SELF-HEAL: remove any existing nav/header link to this path first (clears prior broken
   // or wrongly-placed adds), then add exactly one proper menu item.
@@ -287,19 +345,12 @@ export function addNavLink(html: string, newPath: string, label: string, knownRo
       ;(parent.parentNode as HTMLElement).removeChild(parent) // drop the whole <li> if it only held this link
     } else parent?.removeChild(a)
   }
-  const tmpl = navTemplateAnchor(root, knownRoutes)
-  if (!tmpl) return html
-  // Clone the template's styling verbatim. The current-page highlight is decided at render by
-  // normalizeNavActive (per page), so we don't need to special-case the active class here.
-  const cls = tmpl.getAttribute('class')
-  const anchor = `<a href="${escapeAttr(newPath)}"${cls ? ` class="${escapeAttr(cls)}"` : ''}>${escapeHtml(label)}</a>`
-  const parent = tmpl.parentNode as HTMLElement | null
-  if (parent && tagOf(parent) === 'li') {
-    const liCls = parent.getAttribute('class')
-    parent.insertAdjacentHTML('afterend', `<li${liCls ? ` class="${escapeAttr(liCls)}"` : ''}>${anchor}</li>`)
-  } else {
-    tmpl.insertAdjacentHTML('afterend', anchor)
-  }
+  // Add one proper menu item to EVERY menu list (desktop bar + mobile/hamburger drawer), each
+  // cloning that list's OWN link styling. The current-page highlight is decided at render by
+  // normalizeNavActive (per page), so we don't special-case the active class here.
+  const groups = navMenuGroups(root)
+  if (!groups.length) return html
+  for (const g of groups) addNavCloneAfter(g.template, newPath, label)
   return root.toString()
 }
 
@@ -368,7 +419,57 @@ export function applyElementOp(html: string, op: ElementOp): string | null {
   }
   const el = linkEls(root)[op.index]
   if (!el) return null
+  if (syncNavMenus(root, el, op)) return root.toString() // nav menu add/remove → keep all menu lists in sync
   return applyToElement(el, op) ? root.toString() : null
+}
+
+/**
+ * If `el` is a nav MENU link, keep EVERY menu list (desktop bar + mobile/hamburger drawer) in sync
+ * for an add-after or remove, and return true (handled). Returns false for non-nav links or other
+ * ops, so the caller falls back to the plain single-element op. Used by BOTH the page path
+ * (applyElementOp) AND the shared-component path (applyElementOpInComponent) — nav links go through
+ * the latter, so the sync MUST live here, not just inline above.
+ */
+function syncNavMenus(root: HTMLElement, el: HTMLElement, op: ElementOp): boolean {
+  if (op.op !== 'add-after' && op.op !== 'remove') return false
+  if (!hasAncestorTag(el, ['nav', 'header']) || isNavLogo(el)) return false
+  const clicked = navContainerOf(el)
+  const groups = navMenuGroups(root)
+  if (!groups.some((g) => g.container === clicked)) return false // el isn't part of a detected menu list
+
+  if (op.op === 'remove') {
+    const href = el.getAttribute('href') || ''
+    removeNavAnchor(el)
+    // remove the same-href counterpart from every OTHER menu list too (desktop ⇄ mobile)
+    if (href)
+      for (const g of navMenuGroups(root))
+        for (const a of g.container.querySelectorAll('a') as HTMLElement[])
+          if (!isNavLogo(a) && (a.getAttribute('href') || '') === href) removeNavAnchor(a)
+    return true
+  }
+  // add-after: insert after the clicked item (unless that list already links there — avoids a
+  // duplicate / heals a one-menu add), then fill every OTHER menu list, each in its own styling.
+  const href = safeHref(op.href)
+  const label = (op.text || 'Link').slice(0, 80)
+  if (!containerLinksTo(clicked, href)) applyToElement(el, op)
+  for (const g of groups) {
+    if (g.container === clicked || containerLinksTo(g.container, href)) continue
+    addNavCloneAfter(g.template, href, label)
+  }
+  return true
+}
+
+/** Remove a nav anchor (and its wrapping <li> if that's all it held). */
+function removeNavAnchor(a: HTMLElement): void {
+  const parent = a.parentNode as HTMLElement | null
+  if (parent && tagOf(parent) === 'li' && (parent.querySelectorAll('a') as HTMLElement[]).length === 1 && parent.parentNode) {
+    ;(parent.parentNode as HTMLElement).removeChild(parent)
+  } else parent?.removeChild(a)
+}
+
+/** True if a menu container already has an anchor pointing at `href`. */
+function containerLinksTo(c: HTMLElement | null, href: string): boolean {
+  return !!c && (c.querySelectorAll('a') as HTMLElement[]).some((a) => (a.getAttribute('href') || '') === href)
 }
 
 /** Apply a single element op (set-link / remove / add-after) to a specific element node. */
@@ -514,7 +615,22 @@ export function applyItemOpInComponent(html: string, loc: { tag: string; compInd
   const root = parse(html, { comment: true })
   const comp = (root.querySelectorAll(loc.tag) as HTMLElement[])[loc.compIndex]
   if (!comp) return null
-  return doItemOp(itemsInside(root, comp), { ...op, index: loc.itemIndex }) ? root.toString() : null
+  const items = itemsInside(root, comp)
+  // Removing a nav MENU item (e.g. a nav link, which is also a repeated item) must clear its
+  // counterpart in the OTHER menu list (desktop ⇄ mobile drawer) too — same as element-remove.
+  if (op.op === 'remove') {
+    const target = items[loc.itemIndex]
+    const link = target && (tagOf(target) === 'a' ? target : (target.querySelector('a') as HTMLElement | null))
+    const href = link?.getAttribute('href') || ''
+    const inMenu = !!link && !isNavLogo(link) && navMenuGroups(root).some((g) => g.container === navContainerOf(link))
+    if (!doItemOp(items, { ...op, index: loc.itemIndex })) return null
+    if (inMenu && href)
+      for (const g of navMenuGroups(root))
+        for (const a of g.container.querySelectorAll('a') as HTMLElement[])
+          if (!isNavLogo(a) && (a.getAttribute('href') || '') === href) removeNavAnchor(a)
+    return root.toString()
+  }
+  return doItemOp(items, { ...op, index: loc.itemIndex }) ? root.toString() : null
 }
 
 /** The clean outer HTML of the item at `index` — sent to the AI as edit context for item "Edit with AI". */
@@ -557,6 +673,9 @@ export function applyElementOpInComponent(html: string, loc: { tag: string; comp
   if (!comp) return null
   const el = (comp.querySelectorAll('a, button') as HTMLElement[])[op.index]
   if (!el) return null
+  // A nav link lives in a shared component (header/nav) that holds BOTH the desktop bar and the
+  // mobile drawer — so add/remove must hit every menu list here too, not just the clicked element.
+  if (syncNavMenus(root, el, op)) return root.toString()
   return applyToElement(el, op) ? root.toString() : null
 }
 

@@ -2,6 +2,17 @@
 
 ## 2026-06-26
 
+**`2:10 PM`** — connected sites: nav add AND remove now sync across desktop + mobile (the real path)
+- The earlier nav-sync fix lived in `applyElementOp`, but a nav link is a **shared component**, so the live route actually goes through `applyElementOpInComponent` (element path) / `applyItemOpInComponent` (item path) — which **never called the sync**. That's why, even after a dev-server restart, a new button (`testButton`) still only hit the desktop bar and a removed button stayed in the hamburger.
+- Centralised the menu sync into one helper and wired it into **both** shared paths, for **add AND remove**: adding a nav link fills every menu list (desktop + mobile drawer); **removing one now clears it from every menu list too** (it previously only removed the clicked copy). The logo/CTA are still never touched (shape detection); removal matches by `href` and skips the logo so removing "Home" never deletes the brand logo.
+- Verified end-to-end via the real `sharedComponentLocator → applyElementOpInComponent` and `sharedItemLocator → applyItemOpInComponent` paths, plus add-then-remove round-trips.
+
+**`1:05 PM`** — connected sites: a new nav link now appears in the MOBILE menu too
+- A responsive site renders its nav twice — a desktop bar **and** a separate mobile/hamburger drawer, each its own `<ul>`. Adding a nav link only filled one, so a new page (e.g. "products") showed in the desktop bar but was **missing from the hamburger menu**.
+- **Root cause:** the menu-link detector flagged a link as a "CTA button" by class keywords including `rounded` — but Tailwind sites put **`rounded-md` on every menu link**, so *all* links were misread as CTAs and **no menu list qualified** → the mobile list got nothing (and even the desktop add fell back to a single positional insert). Replaced the brittle keyword check with **class-SHAPE detection**: menu links are the ones sharing a list's common class signature; the **logo** (it wraps an image/svg) and the odd-shaped **CTA** drop out on their own — no hardcoded keywords, works on any site (same philosophy as the highlight fix).
+- Now adding a link finds **every** menu list and adds it to each in that list's own styling; it's **self-healing & dedup-aware** (a menu that already links there isn't duplicated), and works on the path you actually use — **"Add link after this"**.
+- **To fix your current "products":** open the page, click the desktop **products** nav button's ⋮ → **Add link after this** → set the text to "products" and choose the products page again. It won't duplicate on desktop and will drop into the mobile menu. (Or remove it and re-add — same result.)
+
 **`10:15 AM`** — connected chat: every action shows the request bubble, not just the reply
 - Deterministic edits (add/remove a button, set link / redirect, add a link after, link an image, move/duplicate/remove a card, move/delete a section) now echo a **"you" request bubble** before the buffering skeleton + result — matching the AI "Add a section" flow. Previously these jumped straight to the reply, so the chat looked one-sided. `elementOp` takes a request message (all call sites updated); the item + section handlers emit one too.
 

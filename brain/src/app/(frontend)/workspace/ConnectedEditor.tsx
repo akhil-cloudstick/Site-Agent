@@ -232,6 +232,31 @@ export function ConnectedEditor({
   const chatRef = useRef<HTMLTextAreaElement>(null)
   const chatScrollRef = useRef<HTMLDivElement>(null)
   const pendingImg = useRef<{ id: string } | null>(null)
+  // Width of the chat panel in px; drag the divider to resize chat vs. preview (like the builder).
+  const [chatWidth, setChatWidth] = useState(360)
+  const [resizing, setResizing] = useState(false) // drag in progress → overlay swallows iframe events
+
+  function startResize(e: React.MouseEvent) {
+    e.preventDefault()
+    const startX = e.clientX
+    const startWidth = chatWidth
+    setResizing(true)
+    function onMove(ev: MouseEvent) {
+      const next = startWidth + (ev.clientX - startX)
+      setChatWidth(Math.max(280, Math.min(next, window.innerWidth - 420)))
+    }
+    function onUp() {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      setResizing(false)
+    }
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }
 
   const fileToDataUrl = (file: File) =>
     new Promise<string>((resolve, reject) => {
@@ -1277,8 +1302,11 @@ export function ConnectedEditor({
 
   return (
     <div style={{ display: 'flex', height: '100%', fontFamily: 'system-ui, sans-serif', color: '#111' }}>
+      {/* While dragging the splitter, this transparent overlay sits above the preview iframes so
+          the cursor never enters them — otherwise the iframe eats mousemove and the drag sticks. */}
+      {resizing && <div style={{ position: 'fixed', inset: 0, zIndex: 9999, cursor: 'col-resize' }} />}
       {/* Left panel — the conversation. Site controls live in the drawer (☰). */}
-      <div style={{ width: 360, minWidth: 300, borderRight: '1px solid #e2e2e2', display: 'flex', flexDirection: 'column', background: '#fafafa' }}>
+      <div style={{ width: chatWidth, flex: 'none', display: 'flex', flexDirection: 'column', background: '#fafafa' }}>
         {/* Conversation (same bubble style as the builder) */}
         <div ref={chatScrollRef} style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
           {messages.length === 0 && active && (
@@ -1392,6 +1420,13 @@ export function ConnectedEditor({
           </div>
         )}
       </div>
+
+      {/* Drag to resize the chat vs. preview split (same as the builder). */}
+      <div
+        onMouseDown={startResize}
+        title="Drag to resize"
+        style={{ width: 6, flex: 'none', cursor: 'col-resize', background: '#e2e2e2', borderRight: '1px solid #d4d4d4' }}
+      />
 
       {/* Preview — page tabs + Undo + edit-mode toggle, then address bar */}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#fff' }}>

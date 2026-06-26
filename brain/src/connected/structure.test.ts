@@ -9,6 +9,7 @@ import {
   detectNavStyles,
   applyElementOp,
   applyElementOpInComponent,
+  linkEls,
   applyItemOp,
   applyItemOpInComponent,
   applySectionOp,
@@ -112,6 +113,79 @@ describe('addNavLink (nav shortcut to a new page)', () => {
     const menu = out.slice(out.indexOf('<div class="menu"'), out.indexOf('</div>'))
     expect(menu).toContain('href="/products"') // landed in the menu, not on the CTA
     expect(out).not.toMatch(/class="btn cta"[^>]*>Products/) // did not clone the red CTA
+  })
+
+  // A real responsive Astro/Tailwind nav (mirrors the AtlasInfra site): a desktop <ul> AND a
+  // SEPARATE mobile/hamburger <ul>, a logo (href="/", wraps an svg) and a "Contact Us" CTA that
+  // shares `rounded-md` with the menu links but differs in shape (px-4 / font-semibold / bg). The
+  // old keyword filter flagged every `rounded-md` link as a CTA → menu empty → nothing added to
+  // mobile. The fix detects menu links by class-SHAPE, so it adds to BOTH lists in each one's
+  // own styling and never clones the logo/CTA.
+  const MENU = 'block rounded-md px-3 py-2.5 text-sm font-medium transition-colors'
+  const ACTIVE = `${MENU} text-white bg-white/10`
+  const IDLE = `${MENU} text-white/60 hover:text-white`
+  const CTACLS = 'block rounded-md bg-crimson px-4 py-2.5 text-center text-sm font-semibold text-white'
+  const list = (cls: string) =>
+    `<ul class="${cls}"><li><a href="/" class="${ACTIVE}">Home</a></li><li><a href="/contact" class="${IDLE}">Contact</a></li><li class="pt-2"><a href="/contact" class="${CTACLS}">Contact Us</a></li></ul>`
+  const RESPONSIVE = `<header>
+    <nav class="flex"><a href="/" class="logo"><svg></svg></a>${list('hidden md:flex desktopmenu')}</nav>
+    <div class="peer-checked:block md:hidden mobilemenu">${list('flex flex-col')}</div>
+  </header><main></main>`
+  it('adds the link to BOTH the desktop bar AND the separate mobile menu, in menu styling (not the CTA)', () => {
+    const out = addNavLink(RESPONSIVE, '/products', 'Products', ['/', '/contact'])
+    const nav = out.slice(out.indexOf('desktopmenu'), out.indexOf('</nav>'))
+    const mob = out.slice(out.indexOf('mobilemenu'))
+    expect(nav).toContain('href="/products"') // desktop list got it
+    expect(mob).toContain('href="/products"') // mobile list got it
+    expect((out.match(/>Products</g) || []).length).toBe(2) // exactly one per menu list
+    expect(out).toMatch(new RegExp(`class="${IDLE.replace(/[/]/g, '\\/')}"[^>]*>Products`)) // menu styling, not the CTA
+    expect(out).not.toMatch(/bg-crimson[^>]*>Products/) // never cloned the red CTA button
+  })
+
+  it('add-after on a nav menu link also fills the mobile menu (applyElementOp)', () => {
+    // body <a>/<button> order: 0 logo, 1 Home(desktop), 2 Contact(desktop) → add after index 2.
+    const out = applyElementOp(RESPONSIVE, { op: 'add-after', index: 2, text: 'Products', href: '/products' })!
+    expect(out).not.toBeNull()
+    const mob = out.slice(out.indexOf('mobilemenu'))
+    expect(mob).toContain('href="/products"') // landed in the mobile list too
+    expect((out.match(/>Products</g) || []).length).toBe(2) // desktop (clicked spot) + mobile
+    expect(out).not.toMatch(/bg-crimson[^>]*>Products/) // mobile clone used menu styling, not the CTA
+  })
+
+  // The REAL live path: a nav link is a SHARED component, so the route uses
+  // sharedComponentLocator → applyElementOpInComponent (NOT applyElementOp). The sync MUST work here.
+  it('shared-component path fills BOTH menus on add (the path the route actually uses)', () => {
+    const loc = sharedComponentLocator(RESPONSIVE, 2)! // the desktop "Contact" link
+    expect(loc.tag).toBe('header')
+    const out = applyElementOpInComponent(RESPONSIVE, loc, { op: 'add-after', index: loc.elIndex, text: 'Products', href: '/products' })!
+    expect(out).not.toBeNull()
+    expect(out.slice(out.indexOf('desktopmenu'), out.indexOf('</nav>'))).toContain('href="/products"')
+    expect(out.slice(out.indexOf('mobilemenu'))).toContain('href="/products"')
+    expect((out.match(/>Products</g) || []).length).toBe(2)
+  })
+
+  it('shared-component path REMOVES a nav link from BOTH menus', () => {
+    // add to both, then remove via the desktop copy → must vanish from desktop AND mobile.
+    const loc = sharedComponentLocator(RESPONSIVE, 2)!
+    const added = applyElementOpInComponent(RESPONSIVE, loc, { op: 'add-after', index: loc.elIndex, text: 'Products', href: '/products' })!
+    expect((added.match(/>Products</g) || []).length).toBe(2)
+    const gi = linkEls(parse(added, { comment: true })).findIndex((a) => (a.getAttribute('href') || '') === '/products')
+    const rloc = sharedComponentLocator(added, gi)!
+    const removed = applyElementOpInComponent(added, rloc, { op: 'remove', index: rloc.elIndex })!
+    expect(removed).not.toBeNull()
+    expect(removed).not.toContain('href="/products"') // gone from desktop AND mobile
+  })
+
+  it('item-path remove of a nav link also clears the mobile menu (nav links are items too)', () => {
+    const both = addNavLink(RESPONSIVE, '/products', 'Products') // products in desktop + mobile <li>s
+    expect((both.match(/>Products</g) || []).length).toBe(2)
+    const items = itemEls(parse(both, { comment: true }))
+    const gi = items.findIndex((it) => (it.querySelector('a')?.getAttribute('href') || '') === '/products') // first = desktop
+    const loc = sharedItemLocator(both, gi)!
+    expect(loc.tag).toBe('header')
+    const out = applyItemOpInComponent(both, loc, { op: 'remove', index: loc.itemIndex })!
+    expect(out).not.toBeNull()
+    expect(out).not.toContain('href="/products"') // gone from BOTH menus via the item path
   })
 })
 
