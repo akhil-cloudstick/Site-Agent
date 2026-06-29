@@ -19,6 +19,7 @@ export interface Impersonation {
  */
 export function UnifiedWorkspace({
   userEmail,
+  tenantId,
   workspace,
   initialLiveUrl,
   connectedSites,
@@ -28,6 +29,7 @@ export function UnifiedWorkspace({
   initialAllowOperatorEdit = false,
 }: {
   userEmail: string
+  tenantId: number
   workspace: any
   initialLiveUrl: any
   connectedSites: ConnectedSiteSummary[]
@@ -205,6 +207,7 @@ export function UnifiedWorkspace({
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
         {mode === 'block' ? (
           <WorkspaceClient
+            tenantId={tenantId}
             workspace={workspace}
             initialLiveUrl={initialLiveUrl}
             drawerOpen={drawerOpen}

@@ -8,7 +8,7 @@ import { loadWorkspaceDto } from '@/workspace/preview'
 // Allowed direct-edit paths into the dynamic layout.
 const PATH_RE = [
   /^layout\.\d+\.(heading|subheading|buttonLabel|text|body)$/,
-  /^layout\.\d+\.items\.\d+\.(title|text|quote|author)$/,
+  /^layout\.\d+\.items\.\d+\.(title|text|quote|author|name|description|price|oldPrice|badge|buttonLabel|caption|question|answer|period|features|highlighted|alt)$/,
 ]
 const isAllowedPath = (p: unknown): p is string => typeof p === 'string' && PATH_RE.some((r) => r.test(p))
 

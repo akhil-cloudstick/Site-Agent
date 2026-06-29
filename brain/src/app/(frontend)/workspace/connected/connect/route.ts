@@ -5,6 +5,7 @@ import { fetchPageHtml } from '@/connected/fetch'
 import { connectSite, createConnectedSiteShell, deleteConnectedSite, ingestConnectedSite } from '@/connected/store'
 import { reapStaleJobs } from '@/jobs/store'
 import { startJob } from '@/jobs/runner'
+import { logTenantError } from '@/operator/errorLog'
 
 /**
  * POST /workspace/connected/connect — connect a website.
@@ -62,6 +63,7 @@ export async function POST(req: NextRequest) {
     const site = (await connectSite(tenantId, { name, originUrl, repo, cloudflareProject, pages: { '/': html } })) as any
     return NextResponse.json({ ok: true, siteId: site.id, pagePaths: ['/'] })
   } catch (err) {
+    await logTenantError(tenantId, 'connect_site', err, { detail: `url: ${originUrl || sourcePath}` })
     return NextResponse.json({ ok: false, message: err instanceof Error ? err.message : 'Could not connect that site.' }, { status: 400 })
   }
 }

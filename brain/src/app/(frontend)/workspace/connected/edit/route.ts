@@ -3,6 +3,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { uploadTenantMedia } from '@/broker/adapter'
 import { requireWritableTenant } from '@/auth/requireTenant'
 import { setDraftValue } from '@/connected/store'
+import { logTenantError } from '@/operator/errorLog'
 
 /** POST /workspace/connected/edit — set one draft value.
  *  - JSON { siteId, path, id, value } for text.
@@ -39,6 +40,7 @@ export async function POST(req: NextRequest) {
     const paths = await setDraftValue(tenantId, siteId, pathname, id, 'text', value)
     return NextResponse.json({ ok: true, paths })
   } catch (err) {
+    await logTenantError(tenantId, 'set_value', err)
     return NextResponse.json({ ok: false, message: err instanceof Error ? err.message : 'Could not save.' }, { status: 500 })
   }
 }

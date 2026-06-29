@@ -16,6 +16,23 @@ describe('parseLayout (dynamic layout, fail-closed)', () => {
     if (r.ok) expect(r.layout).toHaveLength(3)
   })
 
+  it('accepts the new section types (gallery, faq, pricing, logos) with items', () => {
+    const r = parseLayout({
+      layout: [
+        { type: 'gallery', heading: 'Our work', items: [{ caption: 'Shot A' }, { caption: 'Shot B' }] },
+        { type: 'faq', heading: 'FAQ', items: [{ question: 'How?', answer: 'Like this.' }] },
+        { type: 'pricing', heading: 'Plans', items: [{ name: 'Pro', price: '$29', period: '/mo', features: 'x\ny', buttonLabel: 'Buy', highlighted: 'true' }] },
+        { type: 'logos', heading: 'Trusted by', items: [{ alt: 'Acme' }] },
+      ],
+    })
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.layout).toHaveLength(4)
+  })
+
+  it('rejects an unknown item field on a new block (fail-closed)', () => {
+    expect(parseLayout({ layout: [{ type: 'pricing', items: [{ name: 'x', color: 'red' }] }] }).ok).toBe(false)
+  })
+
   it('rejects an unknown block type', () => {
     expect(parseLayout({ layout: [{ type: 'carousel', heading: 'x' }] }).ok).toBe(false)
   })

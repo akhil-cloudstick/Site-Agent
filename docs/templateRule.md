@@ -31,8 +31,23 @@ SiteAgent auto-detects content, so tagging is optional — but a `data-sa` marke
 - `<key>` = `section.field`, lowercase (`hero.heading`, `about.body`); repeated items indexed (`services.items.0.title`).
 - Unique per page. Assign once; never rename.
 
-## 5. Images
-- Editable images: plain `<img src="/images/…">` from `public/` — not framework-optimized/hashed imports.
+## 5. Images, icons & logos
+- **Editable images:** plain `<img src="/images/…">` from `public/` — not framework-optimized/hashed imports.
+
+### Icons & logos — three patterns, all supported
+How an icon is *included* only decides *how* it can be edited. Pick per icon — none require changing your normal workflow:
+
+| Pattern | Example | Change image (click → upload/swap) | Edit with AI |
+|---|---|---|---|
+| **A. Inline SVG** (paste the SVG code; incl. icon fonts) | `<svg viewBox="0 0 512 512"><path d="…"/></svg>` | ❌ | ✅ |
+| **B. Remote image** (icon straight from a CDN — no local file) | `<img src="https://cdn.icons.com/home.svg">` | ✅ | ✅ |
+| **C. Local image** (your own file) | `<img src="/icons/home.svg">` or `.png` | ✅ | ✅ |
+
+- **A — Inline `<svg>` / icon fonts** (`<i class="fa-…">`, `material-icons`): render exactly as designed with full CSS control (`currentColor`, hover, animation). They **can't be swapped with the image picker** (they're markup, not a file) but **are editable via "Edit with AI"** ("change the gear icon to a database icon"). **Recommended for ordinary/themed icons when the client edits via AI — no local file needed.** This is the normal "paste the SVG" workflow and it's fine.
+- **B — Remote `<img src="https://…">`**: use an icon straight from an **online source, no local file required**. SiteAgent treats it as an image, so it's swappable via **Change image** (the swap uploads a replacement) *and* AI-editable. Good when you don't host icons yourself.
+- **C — Local `<img src="/…">`**: your own file — use this for the **brand logo / custom marks** you keep locally. Fully editable, and the **only** way the client can upload their **exact** asset (AI can only *generate* an approximation, not your precise file).
+- **An icon/logo that links somewhere:** wrap the `<img>` in `<a href="…">` — then it's both **image-editable** and **link-editable** (set/redirect, reorder).
+- Mark editable icons/logos with a `data-sa` image marker like any image: `<img data-sa="image:nav.logo" src="/logo.svg" alt="Acme">`.
 
 ## 6. CSS / JavaScript / animations
 - All allowed. SiteAgent changes only the text/image values inside elements — never classes, CSS, layout, or scripts.
@@ -52,6 +67,7 @@ SiteAgent auto-detects content, so tagging is optional — but a `data-sa` marke
 - Put editable content behind a login.
 - Reuse or rename `data-sa` keys.
 - Hash/optimize images that should be swappable.
+- **Inline an `<svg>` for the brand logo / any asset the client must upload as a specific file** — use `<img src="…">` so they can replace the exact file. _(Inline `<svg>` is fine for ordinary icons that are edited via AI.)_
 
 ## 11. Handover
 - GitHub repo (or the built site files).
@@ -66,14 +82,20 @@ SiteAgent auto-detects content, so tagging is optional — but a `data-sa` marke
 ---
 <html lang="en">
   <body>
+    <header>
+      <!-- Logo as <img> → editable + linkable. (An inline <svg> here would NOT be swappable.) -->
+      <a href="/"><img data-sa="image:nav.logo" src="/logo.svg" alt="Ayurveda Wellness" /></a>
+    </header>
     <section class="hero">
       <h1  data-sa="text:hero.heading">Welcome to Ayurveda Wellness</h1>
       <p   data-sa="text:hero.subheading">Natural healing, the traditional way.</p>
       <img data-sa="image:hero.image" src="/images/hero.jpg" alt="Clinic" />
+      <!-- Feature icon as <img> → swappable via "Change image". -->
+      <img data-sa="image:hero.icon" src="/icons/leaf.svg" alt="" width="32" height="32" />
     </section>
   </body>
 </html>
 ```
 
 ---
-**Scope:** SiteAgent edits **text and images** only. Structural changes (pages, sections, layout) are a later capability.
+**Scope:** SiteAgent edits **text, images, and icons/logos referenced as `<img>`**. It also now does **structural editing** on a connected site — add/remove/reorder pages & sections, reorder/duplicate/remove items (cards, nav links, buttons), set links/redirects, and AI-generate or AI-edit a section/page/card. Following the build standard above keeps content edits reliable; the structural ops layer on top.

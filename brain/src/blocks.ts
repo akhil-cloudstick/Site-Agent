@@ -98,8 +98,62 @@ export const richTextBlock: Block = {
   ],
 }
 
-export const pageBlocks: Block[] = [heroBlock, featuresBlock, productsBlock, testimonialsBlock, ctaBlock, contactBlock, richTextBlock]
+export const galleryBlock: Block = {
+  slug: 'gallery',
+  interfaceName: 'GalleryBlock',
+  fields: [
+    { name: 'heading', type: 'text' },
+    { name: 'image', type: 'upload', relationTo: 'media' },
+    // A grid of images, each with an optional caption.
+    { name: 'items', type: 'array', fields: [{ name: 'caption', type: 'text' }, { name: 'image', type: 'upload', relationTo: 'media' }] },
+  ],
+}
+
+export const faqBlock: Block = {
+  slug: 'faq',
+  interfaceName: 'FaqBlock',
+  fields: [
+    { name: 'heading', type: 'text' },
+    { name: 'image', type: 'upload', relationTo: 'media' },
+    { name: 'items', type: 'array', fields: [{ name: 'question', type: 'text' }, { name: 'answer', type: 'textarea' }] },
+  ],
+}
+
+export const pricingBlock: Block = {
+  slug: 'pricing',
+  interfaceName: 'PricingBlock',
+  fields: [
+    { name: 'heading', type: 'text' },
+    { name: 'image', type: 'upload', relationTo: 'media' },
+    {
+      name: 'items',
+      type: 'array',
+      fields: [
+        { name: 'name', type: 'text' }, // tier name, e.g. "Pro"
+        { name: 'price', type: 'text' }, // e.g. "$29"
+        { name: 'period', type: 'text' }, // e.g. "/mo"
+        { name: 'features', type: 'textarea' }, // one feature per line
+        { name: 'buttonLabel', type: 'text' },
+        // Text FLAG ("true"/absent) so the strict all-strings intent parser is untouched.
+        { name: 'highlighted', type: 'text' },
+      ],
+    },
+  ],
+}
+
+export const logosBlock: Block = {
+  slug: 'logos',
+  interfaceName: 'LogosBlock',
+  fields: [
+    { name: 'heading', type: 'text' },
+    { name: 'image', type: 'upload', relationTo: 'media' },
+    // A strip of logos, each an image with optional alt text.
+    { name: 'items', type: 'array', fields: [{ name: 'alt', type: 'text' }, { name: 'image', type: 'upload', relationTo: 'media' }] },
+  ],
+}
+
+export const pageBlocks: Block[] = [heroBlock, featuresBlock, productsBlock, testimonialsBlock, galleryBlock, faqBlock, pricingBlock, logosBlock, ctaBlock, contactBlock, richTextBlock]
 
 /** The block type slugs, for validation. */
-export const BLOCK_TYPES = ['hero', 'features', 'products', 'testimonials', 'cta', 'contact', 'richText'] as const
+export const BLOCK_TYPES = ['hero', 'features', 'products', 'testimonials', 'gallery', 'faq', 'pricing', 'logos', 'cta', 'contact', 'richText'] as const
 export type BlockType = (typeof BLOCK_TYPES)[number]

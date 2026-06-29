@@ -7,6 +7,7 @@ import { cloudflareConfigured, deployConnectedSite } from '../publish/deploy-clo
 import type { ContentMap } from './content'
 import { applyContent } from './html'
 import { getConnectedSite, updateConnectedSite, type PageHtmlMap, type SiteContentMap } from './store'
+import { detectNavStyles, normalizeNavActive } from './structure'
 
 const pathForRoute = (route: string) => (route === '/' || route === '' ? 'index.html' : `${route.replace(/^\/+/, '')}/index.html`)
 
@@ -74,10 +75,12 @@ export async function buildWholeSite(sourcePath: string, sourceHtml: PageHtmlMap
   ctx.reporter(45, 'Bundling images…')
   const bundled = await bundleMedia(content, dir)
   ctx.reporter(60, 'Applying your changes…')
+  const navStyles = detectNavStyles(Object.values(sourceHtml))
   for (const [route, html] of Object.entries(sourceHtml)) {
     const dest = fileForRoute(dir, route)
-    // Apply onto the stored HTML (clean, no editor/prefix) and write to the page's file.
-    const out = applyContent(html, bundled[route] ?? {})
+    // Apply onto the stored HTML (clean, no editor/prefix), with each page's nav highlighting
+    // its own link (the site's own active styling), and write to the page's file.
+    const out = applyContent(normalizeNavActive(html, route, navStyles), bundled[route] ?? {})
     if (dest) await writeFile(dest, out, 'utf8')
     else {
       const fallback = path.join(dir, pathForRoute(route))
@@ -90,8 +93,9 @@ export async function buildWholeSite(sourcePath: string, sourceHtml: PageHtmlMap
 /** Render a connected site's pages with the given content (applied onto the stored HTML). */
 export function renderSite(sourceHtml: PageHtmlMap, content: SiteContentMap): PageHtmlMap {
   const out: PageHtmlMap = {}
+  const navStyles = detectNavStyles(Object.values(sourceHtml))
   for (const [pathname, html] of Object.entries(sourceHtml)) {
-    out[pathname] = applyContent(html, content[pathname] ?? {})
+    out[pathname] = applyContent(normalizeNavActive(html, pathname, navStyles), content[pathname] ?? {})
   }
   return out
 }
@@ -133,17 +137,20 @@ export async function publishConnectedSite(tenantId: number, siteId: number, ctx
   ctx.reporter(75, 'Uploading to Cloudflare…')
   const { url: deployedUrl } = await deployConnectedSite(project, dir, ctx.registerChild)
   ctx.reporter(95, 'Finishing up…')
-  // The live URL is the site's own address if it has one (custom domain), else the
-  // Cloudflare URL we just deployed to (e.g. a brand-new, not-previously-deployed site).
-  const originUrl = typeof site.originUrl === 'string' ? site.originUrl.trim() : ''
-  const url = originUrl && !originUrl.startsWith('pending:') ? originUrl : deployedUrl
+  // The live URL is the site's own address ONLY if it's a real custom domain. A pending
+  // placeholder OR a Cloudflare *.pages.dev URL (which Cloudflare assigns and may suffix,
+  // e.g. <project>-c2r.pages.dev) is never canonical — always take it from the actual
+  // deploy, so a previously-guessed/stale pages.dev URL self-heals on the next publish.
+  const rawOrigin = typeof site.originUrl === 'string' ? site.originUrl.trim() : ''
+  const customDomain = rawOrigin && !rawOrigin.startsWith('pending:') && !/\.pages\.dev/i.test(rawOrigin) ? rawOrigin : ''
+  const url = customDomain || deployedUrl
 
   // Success → rotate snapshots for rollback + record the live URL (+ fill it in if this
   // was the very first deploy of a site that wasn't live yet).
   await updateConnectedSite(tenantId, siteId, {
     previousContent: site.publishedContent ?? {},
     publishedContent: draft,
-    originUrl: originUrl && !originUrl.startsWith('pending:') ? originUrl : deployedUrl,
+    originUrl: customDomain || deployedUrl,
     liveUrl: url,
   })
   return { url }

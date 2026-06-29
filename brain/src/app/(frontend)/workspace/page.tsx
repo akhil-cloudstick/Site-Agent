@@ -22,6 +22,11 @@ export default async function WorkspacePage({ searchParams }: { searchParams: Pr
   if (eff.action === 'clear-cookie-redirect-admin') redirect('/exit-impersonation?to=/admin')
   if (eff.action === 'clear-cookie-resolve-tenant') redirect('/exit-impersonation?to=/workspace')
 
+  // The operator suspended this account → send the member back to the sign-in page (the root
+  // page detects the suspension and shows the login form with a notice; a login attempt is
+  // rejected by /login). We don't render a workspace-level screen.
+  if (eff.suspended) redirect('/')
+
   const tenantId = eff.tenantId
   if (!tenantId) {
     return (
@@ -64,6 +69,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: Pr
   return (
     <UnifiedWorkspace
       userEmail={eff.user.email}
+      tenantId={tenantId}
       workspace={workspace}
       initialLiveUrl={liveUrl}
       connectedSites={connectedSites}

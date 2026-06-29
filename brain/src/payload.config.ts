@@ -15,6 +15,8 @@ import { Changesets } from './collections/Changesets'
 import { Pages } from './collections/Pages'
 import { ConnectedSites } from './collections/ConnectedSites'
 import { Jobs } from './collections/Jobs'
+import { ModelUsage } from './collections/ModelUsage'
+import { ErrorLogs } from './collections/ErrorLogs'
 import { Settings } from './globals/Settings'
 import { getEnv } from './config/env'
 
@@ -40,7 +42,7 @@ export default buildConfig({
   routes: {
     admin: '/admin/payload',
   },
-  collections: [Users, Media, Tenants, Changesets, Pages, ConnectedSites, Jobs],
+  collections: [Users, Media, Tenants, Changesets, Pages, ConnectedSites, Jobs, ModelUsage, ErrorLogs],
   globals: [Settings],
   // Expected access-control denials (403 "not allowed") are logged at ERROR with
   // a full stack by default — far too noisy. Drop them below the default visible
@@ -79,6 +81,7 @@ export default buildConfig({
         media: {},
         connectedSites: {},
         jobs: {},
+        errorLogs: {},
       },
       userHasAccessToAllTenants: (user) => Boolean(user?.isOperator),
     }),

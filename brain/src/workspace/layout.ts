@@ -3,7 +3,7 @@ import type { LayoutBlock } from '@/agent/intent'
 import type { PreviewBlock } from './types'
 
 const SCALAR_FIELDS = ['heading', 'subheading', 'buttonLabel', 'text', 'body'] as const
-const ITEM_FIELDS = ['title', 'text', 'quote', 'author', 'name', 'description', 'price', 'oldPrice', 'badge', 'buttonLabel'] as const
+const ITEM_FIELDS = ['title', 'text', 'quote', 'author', 'name', 'description', 'price', 'oldPrice', 'badge', 'buttonLabel', 'caption', 'question', 'answer', 'period', 'features', 'highlighted', 'alt'] as const
 
 /** Array-aware deep set: handles numeric path parts (array indices), growing arrays as needed. */
 function setNested(obj: any, parts: string[], value: unknown) {
@@ -151,6 +151,14 @@ export function layoutToPreview(page: any): PreviewBlock[] {
         return { type: 'products', heading: s(b.heading), imageUrl: urlOf(b.image), items: (b.items ?? []).map((it: any) => ({ name: s(it.name), description: s(it.description), price: s(it.price), oldPrice: s(it.oldPrice), badge: s(it.badge), buttonLabel: s(it.buttonLabel), imageUrl: urlOf(it.image) })) }
       case 'testimonials':
         return { type: 'testimonials', heading: s(b.heading), imageUrl: urlOf(b.image), items: (b.items ?? []).map((it: any) => ({ quote: s(it.quote), author: s(it.author), imageUrl: urlOf(it.image) })) }
+      case 'gallery':
+        return { type: 'gallery', heading: s(b.heading), imageUrl: urlOf(b.image), items: (b.items ?? []).map((it: any) => ({ caption: s(it.caption), imageUrl: urlOf(it.image) })) }
+      case 'faq':
+        return { type: 'faq', heading: s(b.heading), imageUrl: urlOf(b.image), items: (b.items ?? []).map((it: any) => ({ question: s(it.question), answer: s(it.answer) })) }
+      case 'pricing':
+        return { type: 'pricing', heading: s(b.heading), imageUrl: urlOf(b.image), items: (b.items ?? []).map((it: any) => ({ name: s(it.name), price: s(it.price), period: s(it.period), features: s(it.features), buttonLabel: s(it.buttonLabel), highlighted: s(it.highlighted) })) }
+      case 'logos':
+        return { type: 'logos', heading: s(b.heading), imageUrl: urlOf(b.image), items: (b.items ?? []).map((it: any) => ({ alt: s(it.alt), imageUrl: urlOf(it.image) })) }
       case 'cta':
         return { type: 'cta', heading: s(b.heading), buttonLabel: s(b.buttonLabel), imageUrl: urlOf(b.image) }
       case 'contact':

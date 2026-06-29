@@ -74,6 +74,8 @@ export interface Config {
     pages: Page;
     connectedSites: ConnectedSite;
     jobs: Job;
+    modelUsage: ModelUsage;
+    errorLogs: ErrorLog;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -88,6 +90,8 @@ export interface Config {
     pages: PagesSelect<false> | PagesSelect<true>;
     connectedSites: ConnectedSitesSelect<false> | ConnectedSitesSelect<true>;
     jobs: JobsSelect<false> | JobsSelect<true>;
+    modelUsage: ModelUsageSelect<false> | ModelUsageSelect<true>;
+    errorLogs: ErrorLogsSelect<false> | ErrorLogsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -183,6 +187,10 @@ export interface Tenant {
    * Allow a platform operator to edit this site while impersonating.
    */
   allowOperatorEdit?: boolean | null;
+  /**
+   * Plan label shown on the operator dashboard.
+   */
+  planLabel?: string | null;
   liveUrl?: string | null;
   githubRepo?: string | null;
   deployTargets?:
@@ -262,7 +270,19 @@ export interface Page {
     font?: ('sans' | 'serif') | null;
   };
   layout?:
-    | (HeroBlock | FeaturesBlock | ProductsBlock | TestimonialsBlock | CtaBlock | ContactBlock | RichTextBlock)[]
+    | (
+        | HeroBlock
+        | FeaturesBlock
+        | ProductsBlock
+        | TestimonialsBlock
+        | GalleryBlock
+        | FaqBlock
+        | PricingBlock
+        | LogosBlock
+        | CtaBlock
+        | ContactBlock
+        | RichTextBlock
+      )[]
     | null;
   previousLayout?:
     | {
@@ -349,6 +369,82 @@ export interface TestimonialsBlock {
   id?: string | null;
   blockName?: string | null;
   blockType: 'testimonials';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "GalleryBlock".
+ */
+export interface GalleryBlock {
+  heading?: string | null;
+  image?: (number | null) | Media;
+  items?:
+    | {
+        caption?: string | null;
+        image?: (number | null) | Media;
+        id?: string | null;
+      }[]
+    | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'gallery';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "FaqBlock".
+ */
+export interface FaqBlock {
+  heading?: string | null;
+  image?: (number | null) | Media;
+  items?:
+    | {
+        question?: string | null;
+        answer?: string | null;
+        id?: string | null;
+      }[]
+    | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'faq';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "PricingBlock".
+ */
+export interface PricingBlock {
+  heading?: string | null;
+  image?: (number | null) | Media;
+  items?:
+    | {
+        name?: string | null;
+        price?: string | null;
+        period?: string | null;
+        features?: string | null;
+        buttonLabel?: string | null;
+        highlighted?: string | null;
+        id?: string | null;
+      }[]
+    | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'pricing';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "LogosBlock".
+ */
+export interface LogosBlock {
+  heading?: string | null;
+  image?: (number | null) | Media;
+  items?:
+    | {
+        alt?: string | null;
+        image?: (number | null) | Media;
+        id?: string | null;
+      }[]
+    | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'logos';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -497,6 +593,36 @@ export interface Job {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "modelUsage".
+ */
+export interface ModelUsage {
+  id: number;
+  model: string;
+  calls?: number | null;
+  fails?: number | null;
+  promptTokens?: number | null;
+  completionTokens?: number | null;
+  lastUsedAt?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "errorLogs".
+ */
+export interface ErrorLog {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  action: string;
+  message: string;
+  detail?: string | null;
+  siteId?: number | null;
+  userId?: number | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
 export interface PayloadKv {
@@ -546,6 +672,14 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'jobs';
         value: number | Job;
+      } | null)
+    | ({
+        relationTo: 'modelUsage';
+        value: number | ModelUsage;
+      } | null)
+    | ({
+        relationTo: 'errorLogs';
+        value: number | ErrorLog;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -647,6 +781,7 @@ export interface TenantsSelect<T extends boolean = true> {
   slug?: T;
   status?: T;
   allowOperatorEdit?: T;
+  planLabel?: T;
   liveUrl?: T;
   githubRepo?: T;
   deployTargets?: T;
@@ -696,6 +831,10 @@ export interface PagesSelect<T extends boolean = true> {
         features?: T | FeaturesBlockSelect<T>;
         products?: T | ProductsBlockSelect<T>;
         testimonials?: T | TestimonialsBlockSelect<T>;
+        gallery?: T | GalleryBlockSelect<T>;
+        faq?: T | FaqBlockSelect<T>;
+        pricing?: T | PricingBlockSelect<T>;
+        logos?: T | LogosBlockSelect<T>;
         cta?: T | CtaBlockSelect<T>;
         contact?: T | ContactBlockSelect<T>;
         richText?: T | RichTextBlockSelect<T>;
@@ -776,6 +915,78 @@ export interface TestimonialsBlockSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "GalleryBlock_select".
+ */
+export interface GalleryBlockSelect<T extends boolean = true> {
+  heading?: T;
+  image?: T;
+  items?:
+    | T
+    | {
+        caption?: T;
+        image?: T;
+        id?: T;
+      };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "FaqBlock_select".
+ */
+export interface FaqBlockSelect<T extends boolean = true> {
+  heading?: T;
+  image?: T;
+  items?:
+    | T
+    | {
+        question?: T;
+        answer?: T;
+        id?: T;
+      };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "PricingBlock_select".
+ */
+export interface PricingBlockSelect<T extends boolean = true> {
+  heading?: T;
+  image?: T;
+  items?:
+    | T
+    | {
+        name?: T;
+        price?: T;
+        period?: T;
+        features?: T;
+        buttonLabel?: T;
+        highlighted?: T;
+        id?: T;
+      };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "LogosBlock_select".
+ */
+export interface LogosBlockSelect<T extends boolean = true> {
+  heading?: T;
+  image?: T;
+  items?:
+    | T
+    | {
+        alt?: T;
+        image?: T;
+        id?: T;
+      };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "CtaBlock_select".
  */
 export interface CtaBlockSelect<T extends boolean = true> {
@@ -847,6 +1058,34 @@ export interface JobsSelect<T extends boolean = true> {
   error?: T;
   result?: T;
   finishedAt?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "modelUsage_select".
+ */
+export interface ModelUsageSelect<T extends boolean = true> {
+  model?: T;
+  calls?: T;
+  fails?: T;
+  promptTokens?: T;
+  completionTokens?: T;
+  lastUsedAt?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "errorLogs_select".
+ */
+export interface ErrorLogsSelect<T extends boolean = true> {
+  tenant?: T;
+  action?: T;
+  message?: T;
+  detail?: T;
+  siteId?: T;
+  userId?: T;
   updatedAt?: T;
   createdAt?: T;
 }

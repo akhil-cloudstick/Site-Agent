@@ -18,7 +18,7 @@ export interface ContentEditResult {
 }
 
 const SCALARS = ['heading', 'subheading', 'buttonLabel', 'text', 'body'] as const
-const ITEM_KEYS = ['title', 'text', 'quote', 'author', 'name', 'description', 'price', 'oldPrice', 'badge', 'buttonLabel'] as const
+const ITEM_KEYS = ['title', 'text', 'quote', 'author', 'name', 'description', 'price', 'oldPrice', 'badge', 'buttonLabel', 'caption', 'question', 'answer', 'period', 'features', 'highlighted', 'alt'] as const
 
 export async function runContentEdit(
   tenantId: number,
@@ -50,7 +50,7 @@ export async function runContentEdit(
     'You design a website page. Reply with ONLY a JSON object {"layout":[...blocks], "theme":{...}, "message":"..."} — no prose, no code fences.',
     'The "message" is a short, friendly, plain-language sentence to the customer describing exactly what you changed (e.g. "Done — I changed your main heading to \'Welcome\'." or "Added a products section with 3 items."). Speak TO the customer; never mention JSON, blocks, or layout internals.',
     `Each block has a "type", one of: ${BLOCK_TYPES.map((t) => `"${t}"`).join(', ')}.`,
-    'Block fields — hero: {heading, subheading}; features: {heading, items:[{title,text}]}; products: {heading, items:[{name, description?, price?, oldPrice?, badge?, buttonLabel?}]} (use products for shop/product grids; ONLY include the optional fields the user actually asks for — for a simple catalog use just name + description; oldPrice shows struck-through; badge is e.g. "-30%"); testimonials: {heading, items:[{quote,author}]}; cta: {heading, buttonLabel}; contact: {heading, text, buttonLabel}; richText: {heading, body}.',
+    'Block fields — hero: {heading, subheading}; features: {heading, items:[{title,text}]}; products: {heading, items:[{name, description?, price?, oldPrice?, badge?, buttonLabel?}]} (use products for shop/product grids; ONLY include the optional fields the user actually asks for — for a simple catalog use just name + description; oldPrice shows struck-through; badge is e.g. "-30%"); testimonials: {heading, items:[{quote,author}]}; gallery: {heading, items:[{caption?}]} (a grid of images — the customer adds the photos; you set the heading + optional captions); faq: {heading, items:[{question,answer}]}; pricing: {heading, items:[{name, price?, period?, features?, buttonLabel?, highlighted?}]} (one plan per item; "features" is one feature per line; "period" e.g. "/mo"; set highlighted to "true" on the recommended plan); logos: {heading, items:[{alt?}]} (a logo strip — the customer adds the images); cta: {heading, buttonLabel}; contact: {heading, text, buttonLabel}; richText: {heading, body}.',
     'Return the COMPLETE layout you want, in order. To add a section include a new block; to add items include more items; to reorder change the order; keep the blocks the user did not ask to change.',
     'You may also set "theme": {"primaryColor":"#hex", "font":"sans"|"serif"}.',
     'All values are strings. If a reference image is attached, use what you see in it to inform the design.',

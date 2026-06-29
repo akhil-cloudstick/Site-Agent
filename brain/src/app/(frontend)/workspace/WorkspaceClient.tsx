@@ -7,6 +7,8 @@ const EditModeContext = createContext(true)
 
 import type { CurrentPage, PageSummary, WorkspaceDto } from '@/workspace/types'
 
+import { readChatStream, stageLabel } from './chatStream'
+import { useIsMobile } from './useIsMobile'
 import type { ConnectedSiteSummary } from './ConnectedEditor'
 import { Drawer } from './Drawer'
 import { DrawerLauncher } from './DrawerLauncher'
@@ -21,18 +23,21 @@ interface Msg {
 const CHAT_KEY = 'siteagent.workspace.chat'
 const TYPING = '__typing__'
 
-/** Animated three-dot "the AI is working" indicator. */
-function TypingDots() {
+/** Animated "the AI is working" indicator — shows the REAL streamed stage when given, else dots. */
+function TypingDots({ stage }: { stage?: string | null }) {
   const [n, setN] = useState(0)
   useEffect(() => {
     const id = setInterval(() => setN((x) => (x + 1) % 3), 350)
     return () => clearInterval(id)
   }, [])
   return (
-    <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center', padding: '2px 0' }}>
-      {[0, 1, 2].map((i) => (
-        <span key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: '#9ca3af', opacity: n === i ? 1 : 0.3, transition: 'opacity .2s' }} />
-      ))}
+    <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center', padding: '2px 0' }}>
+      {stage && <span style={{ fontSize: 12, color: '#94a3b8' }}>{stage}</span>}
+      <span style={{ display: 'inline-flex', gap: 5 }}>
+        {[0, 1, 2].map((i) => (
+          <span key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: '#9ca3af', opacity: n === i ? 1 : 0.3, transition: 'opacity .2s' }} />
+        ))}
+      </span>
     </span>
   )
 }
@@ -42,6 +47,7 @@ const GREETING: Msg = {
 }
 
 export function WorkspaceClient({
+  tenantId,
   workspace: initial,
   initialLiveUrl,
   drawerOpen = false,
@@ -56,6 +62,7 @@ export function WorkspaceClient({
   profile,
   onTopBar,
 }: {
+  tenantId: number
   workspace: WorkspaceDto
   initialLiveUrl?: string | null
   drawerOpen?: boolean
@@ -71,6 +78,9 @@ export function WorkspaceClient({
   onTopBar?: (c: { liveUrl: string | null; editMode: boolean; onToggleEdit: () => void; showToggle: boolean }) => void
 }) {
   const [messages, setMessages] = useState<Msg[]>([GREETING])
+  const [streamStage, setStreamStage] = useState<string | null>(null) // live AI progress stage (B1)
+  const isMobile = useIsMobile() // narrow screens → Chat⇄Preview tabs instead of side-by-side (B2)
+  const [mobileTab, setMobileTab] = useState<'chat' | 'preview'>('preview')
   const [pages, setPages] = useState<PageSummary[]>(initial.pages)
   const [current, setCurrent] = useState<CurrentPage | null>(initial.current)
   const [input, setInput] = useState('')
@@ -95,6 +105,7 @@ export function WorkspaceClient({
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null)
   const [target, setTarget] = useState<{ index: number; label: string } | null>(null)
   const chatRef = useRef<HTMLTextAreaElement>(null)
+  const chatScrollRef = useRef<HTMLDivElement>(null)
   // Width of the chat panel in px; the user can drag the divider to resize it.
   const [chatWidth, setChatWidth] = useState(420)
 
@@ -165,21 +176,33 @@ export function WorkspaceClient({
     setCurrent(ws.current)
   }
 
+  // Per-tenant chat key in localStorage — so the builder conversation survives a reload
+  // AND logout/login (sessionStorage was per-tab and cleared on tab close), without leaking
+  // one tenant's chat to the next on a shared browser.
+  const chatStoreKey = `${CHAT_KEY}.${tenantId}`
+
   // Restore chat history on mount (survives a full page refresh). Intentionally
   // sets state after mount — the hydration-safe way to load browser-only state.
   useEffect(() => {
     try {
-      const saved = sessionStorage.getItem(CHAT_KEY)
+      const saved = localStorage.getItem(chatStoreKey)
       // eslint-disable-next-line react-hooks/set-state-in-effect
       if (saved) setMessages(JSON.parse(saved))
     } catch {}
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatStoreKey])
 
   // Persist chat history whenever it changes.
   useEffect(() => {
     try {
-      sessionStorage.setItem(CHAT_KEY, JSON.stringify(messages))
+      localStorage.setItem(chatStoreKey, JSON.stringify(messages))
     } catch {}
+  }, [messages, chatStoreKey])
+
+  // Keep the chat pinned to the latest message (load + new reply/typing indicator).
+  useEffect(() => {
+    const el = chatScrollRef.current
+    if (el) el.scrollTop = el.scrollHeight
   }, [messages])
 
   async function send() {
@@ -193,6 +216,7 @@ export function WorkspaceClient({
     setRefImage(null)
     if (chatRef.current) chatRef.current.style.height = 'auto'
     setBusy(true)
+    setStreamStage(stageLabel('thinking'))
     setMessages((m) => [...m, { role: 'you', text: text || '(look at this)', badges }, { role: 'agent', text: TYPING }])
     try {
       const fd = new FormData()
@@ -202,13 +226,14 @@ export function WorkspaceClient({
       if (sentImage) fd.append('image', sentImage)
       setTarget(null)
       const res = await fetch('/workspace/edit', { method: 'POST', body: fd })
-      const data = await res.json()
+      const data = await readChatStream(res, (stage) => setStreamStage(stageLabel(stage)))
       setMessages((m) => [...m.slice(0, -1), { role: 'agent', text: data.message ?? 'Done.' }])
       if (data.ok) applyWorkspace(data.workspace) // update without a refresh
     } catch {
       setMessages((m) => [...m.slice(0, -1), { role: 'agent', text: 'Something went wrong — nothing was changed.' }])
     } finally {
       setBusy(false)
+      setStreamStage(null)
     }
   }
 
@@ -454,7 +479,7 @@ export function WorkspaceClient({
   }
 
   return (
-    <div style={{ display: 'flex', height: '100%', fontFamily: 'system-ui, sans-serif', color: '#111' }}>
+    <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', height: '100%', fontFamily: 'system-ui, sans-serif', color: '#111' }}>
       {/* The command drawer (☰): launcher (New + History) + Publish. */}
       <Drawer open={drawerOpen} onClose={onCloseDrawer} title="Workspace">
         <DrawerLauncher
@@ -482,9 +507,24 @@ export function WorkspaceClient({
         {profile}
       </Drawer>
 
+      {/* Narrow screens: a Chat | Preview tab switch instead of the side-by-side split. */}
+      {isMobile && (
+        <div style={{ flex: 'none', display: 'flex', borderBottom: '1px solid #e2e2e2', background: '#fff' }}>
+          {(['chat', 'preview'] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setMobileTab(t)}
+              style={{ flex: 1, padding: '10px 0', border: 'none', borderBottom: mobileTab === t ? '2px solid #2563eb' : '2px solid transparent', background: 'transparent', color: mobileTab === t ? '#2563eb' : '#64748b', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}
+            >
+              {t === 'chat' ? 'Chat' : 'Preview'}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Chat */}
-      <div style={{ width: chatWidth, flex: 'none', display: 'flex', flexDirection: 'column', background: '#fafafa' }}>
-        <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ width: isMobile ? '100%' : chatWidth, flex: isMobile ? 1 : 'none', minHeight: 0, display: isMobile && mobileTab !== 'chat' ? 'none' : 'flex', flexDirection: 'column', background: '#fafafa' }}>
+        <div ref={chatScrollRef} style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
           {messages.map((m, i) => (
             <div
               key={i}
@@ -512,7 +552,7 @@ export function WorkspaceClient({
                   ))}
                 </div>
               )}
-              {m.text === TYPING ? <TypingDots /> : m.text}
+              {m.text === TYPING ? <TypingDots stage={streamStage} /> : m.text}
             </div>
           ))}
         </div>
@@ -576,15 +616,17 @@ export function WorkspaceClient({
         )}
       </div>
 
-      {/* Drag to resize the chat vs. preview split. */}
-      <div
-        onMouseDown={startResize}
-        title="Drag to resize"
-        style={{ width: 6, flex: 'none', cursor: 'col-resize', background: '#e2e2e2', borderRight: '1px solid #d4d4d4' }}
-      />
+      {/* Drag to resize the chat vs. preview split. Hidden on mobile (tabs). */}
+      {!isMobile && (
+        <div
+          onMouseDown={startResize}
+          title="Drag to resize"
+          style={{ width: 6, flex: 'none', cursor: 'col-resize', background: '#e2e2e2', borderRight: '1px solid #d4d4d4' }}
+        />
+      )}
 
       {/* Live preview of the draft */}
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#fff' }}>
+      <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: isMobile && mobileTab !== 'preview' ? 'none' : 'flex', flexDirection: 'column', overflow: 'hidden', background: '#fff' }}>
         {/* Page switcher */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderBottom: '1px solid #eee', flexWrap: 'wrap' }}>
           {pages.map((p) => {
@@ -890,6 +932,126 @@ export function WorkspaceClient({
                   </section>
                 )
               }
+              if (block.type === 'gallery') {
+                return (
+                  <section key={i} style={{ position: 'relative', padding: '56px 48px', textAlign: 'center', background: bg ? '#222' : '#fff', ...bgStyle }}>
+                    {overlay}
+                    {sectionMenu(i, current.layout.length, !!bg)}
+                    <div style={{ position: 'relative', zIndex: 1 }}>
+                      <h2 style={{ fontSize: 30, margin: '0 0 36px', color: bg ? '#fff' : '#111' }}>
+                        <Editable value={block.heading} placeholder="(gallery heading)" fontSize={30} onSave={(v) => saveField(`layout.${i}.heading`, v)} />
+                      </h2>
+                      <div style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap' }}>
+                        {block.items.map((it, j) => (
+                          <figure key={j} style={{ position: 'relative', flex: '1 1 200px', maxWidth: 300, margin: 0 }}>
+                            {itemMenu(i, j, !!it.imageUrl)}
+                            {it.imageUrl ? (
+                              <img src={it.imageUrl} alt="" style={{ width: '100%', height: 200, objectFit: 'cover', display: 'block', borderRadius: 10 }} />
+                            ) : (
+                              <div style={{ width: '100%', height: 200, background: '#eee', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bbb', fontSize: 13 }}>No image</div>
+                            )}
+                            <figcaption style={{ fontSize: 13, color: bg ? '#ddd' : '#666', marginTop: 8 }}>
+                              <Editable value={it.caption} placeholder="(caption)" fontSize={13} onSave={(v) => saveField(`layout.${i}.items.${j}.caption`, v)} />
+                            </figcaption>
+                          </figure>
+                        ))}
+                        {editMode && <button onClick={() => addItem(i)} disabled={busy} title="Add an image" style={{ alignSelf: 'center', padding: '12px 18px', borderRadius: 10, border: '1px dashed #bbb', background: '#fafafa', color: '#555', cursor: busy ? 'default' : 'pointer', fontSize: 14 }}>+ Add image</button>}
+                      </div>
+                    </div>
+                  </section>
+                )
+              }
+              if (block.type === 'faq') {
+                return (
+                  <section key={i} style={{ position: 'relative', padding: '56px 48px', textAlign: 'center', background: bg ? '#222' : '#fafafa', ...bgStyle }}>
+                    {overlay}
+                    {sectionMenu(i, current.layout.length, !!bg)}
+                    <div style={{ position: 'relative', zIndex: 1 }}>
+                      <h2 style={{ fontSize: 30, margin: '0 0 36px', color: bg ? '#fff' : '#111' }}>
+                        <Editable value={block.heading} placeholder="(FAQ heading)" fontSize={30} onSave={(v) => saveField(`layout.${i}.heading`, v)} />
+                      </h2>
+                      {block.items.map((it, j) => (
+                        <div key={j} style={{ position: 'relative', maxWidth: 760, margin: '0 auto 16px', textAlign: 'left', borderBottom: '1px solid #eee', paddingBottom: 16 }}>
+                          {itemMenu(i, j, false)}
+                          <h3 style={{ fontSize: 18, margin: '0 0 6px', color: bg ? '#fff' : '#111' }}>
+                            <Editable value={it.question} placeholder="(question)" fontSize={18} onSave={(v) => saveField(`layout.${i}.items.${j}.question`, v)} />
+                          </h3>
+                          <p style={{ fontSize: 15, color: bg ? '#ddd' : '#555', margin: 0, lineHeight: 1.6 }}>
+                            <Editable value={it.answer} placeholder="(answer)" fontSize={15} onSave={(v) => saveField(`layout.${i}.items.${j}.answer`, v)} />
+                          </p>
+                        </div>
+                      ))}
+                      {editMode && <button onClick={() => addItem(i)} disabled={busy} title="Add a question" style={{ marginTop: 8, padding: '12px 18px', borderRadius: 10, border: '1px dashed #bbb', background: '#fafafa', color: '#555', cursor: busy ? 'default' : 'pointer', fontSize: 14 }}>+ Add question</button>}
+                    </div>
+                  </section>
+                )
+              }
+              if (block.type === 'pricing') {
+                return (
+                  <section key={i} style={{ position: 'relative', padding: '56px 48px', textAlign: 'center', background: bg ? '#222' : '#fafafa', ...bgStyle }}>
+                    {overlay}
+                    {sectionMenu(i, current.layout.length, !!bg)}
+                    <div style={{ position: 'relative', zIndex: 1 }}>
+                      <h2 style={{ fontSize: 30, margin: '0 0 36px', color: bg ? '#fff' : '#111' }}>
+                        <Editable value={block.heading} placeholder="(pricing heading)" fontSize={30} onSave={(v) => saveField(`layout.${i}.heading`, v)} />
+                      </h2>
+                      <div style={{ display: 'flex', gap: 24, justifyContent: 'center', flexWrap: 'wrap', alignItems: 'stretch' }}>
+                        {block.items.map((p, j) => (
+                          <div key={j} style={{ position: 'relative', flex: '1 1 240px', maxWidth: 300, background: '#fff', border: p.highlighted === 'true' ? `2px solid ${accent}` : '1px solid #eee', borderRadius: 12, padding: 28, textAlign: 'left', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+                            {itemMenu(i, j, false, [p.highlighted === 'true' ? { label: 'Remove highlight', onClick: () => saveField(`layout.${i}.items.${j}.highlighted`, '') } : { label: 'Highlight (recommended)', onClick: () => saveField(`layout.${i}.items.${j}.highlighted`, 'true') }])}
+                            <h3 style={{ fontSize: 20, margin: '0 0 8px', color: '#111' }}>
+                              <Editable value={p.name} placeholder="(plan name)" fontSize={20} onSave={(v) => saveField(`layout.${i}.items.${j}.name`, v)} />
+                            </h3>
+                            <div style={{ margin: '0 0 16px' }}>
+                              <span style={{ fontSize: 32, fontWeight: 700, color: '#111' }}>
+                                <Editable value={p.price} placeholder="($)" fontSize={32} onSave={(v) => saveField(`layout.${i}.items.${j}.price`, v)} />
+                              </span>
+                              <span style={{ fontSize: 14, color: '#888' }}>
+                                <Editable value={p.period} placeholder="(/mo)" fontSize={14} onSave={(v) => saveField(`layout.${i}.items.${j}.period`, v)} />
+                              </span>
+                            </div>
+                            <div style={{ fontSize: 14, color: '#555', whiteSpace: 'pre-line', marginBottom: 16, lineHeight: 1.7 }}>
+                              <Editable value={p.features} placeholder="(one feature per line)" fontSize={14} onSave={(v) => saveField(`layout.${i}.items.${j}.features`, v)} />
+                            </div>
+                            {p.buttonLabel && (
+                              <span style={{ display: 'block', textAlign: 'center', padding: '10px 0', borderRadius: 8, background: p.highlighted === 'true' ? accent : '#111', color: '#fff', fontSize: 14, fontWeight: 600 }}>
+                                <Editable value={p.buttonLabel} placeholder="(button)" fontSize={14} onSave={(v) => saveField(`layout.${i}.items.${j}.buttonLabel`, v)} />
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                        {editMode && <button onClick={() => addItem(i)} disabled={busy} title="Add a plan" style={{ alignSelf: 'center', padding: '12px 18px', borderRadius: 10, border: '1px dashed #bbb', background: '#fafafa', color: '#555', cursor: busy ? 'default' : 'pointer', fontSize: 14 }}>+ Add plan</button>}
+                      </div>
+                    </div>
+                  </section>
+                )
+              }
+              if (block.type === 'logos') {
+                return (
+                  <section key={i} style={{ position: 'relative', padding: '48px', textAlign: 'center', background: bg ? '#222' : '#fff', ...bgStyle }}>
+                    {overlay}
+                    {sectionMenu(i, current.layout.length, !!bg)}
+                    <div style={{ position: 'relative', zIndex: 1 }}>
+                      <h2 style={{ fontSize: 20, margin: '0 0 28px', fontWeight: 600, color: bg ? '#fff' : '#888' }}>
+                        <Editable value={block.heading} placeholder="(logos heading)" fontSize={20} onSave={(v) => saveField(`layout.${i}.heading`, v)} />
+                      </h2>
+                      <div style={{ display: 'flex', gap: 40, justifyContent: 'center', flexWrap: 'wrap', alignItems: 'center' }}>
+                        {block.items.map((it, j) => (
+                          <div key={j} style={{ position: 'relative' }}>
+                            {itemMenu(i, j, !!it.imageUrl)}
+                            {it.imageUrl ? (
+                              <img src={it.imageUrl} alt={it.alt} style={{ maxHeight: 48, maxWidth: 140, objectFit: 'contain' }} />
+                            ) : (
+                              <div style={{ height: 48, width: 100, background: '#f1f1f1', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bbb', fontSize: 12 }}>Logo</div>
+                            )}
+                          </div>
+                        ))}
+                        {editMode && <button onClick={() => addItem(i)} disabled={busy} title="Add a logo" style={{ alignSelf: 'center', padding: '10px 16px', borderRadius: 10, border: '1px dashed #bbb', background: '#fafafa', color: '#555', cursor: busy ? 'default' : 'pointer', fontSize: 14 }}>+ Add logo</button>}
+                      </div>
+                    </div>
+                  </section>
+                )
+              }
               return (
                 <section key={i} style={{ position: 'relative', padding: '48px', textAlign: 'center', background: bg ? '#222' : undefined, ...bgStyle }}>
                   {overlay}
@@ -979,7 +1141,11 @@ const SECTION_CHOICES: { type: string; label: string }[] = [
   { type: 'hero', label: 'Hero' },
   { type: 'features', label: 'Features' },
   { type: 'products', label: 'Products' },
+  { type: 'gallery', label: 'Gallery' },
+  { type: 'pricing', label: 'Pricing' },
+  { type: 'faq', label: 'FAQ' },
   { type: 'testimonials', label: 'Testimonials' },
+  { type: 'logos', label: 'Logos' },
   { type: 'cta', label: 'Call to action' },
   { type: 'contact', label: 'Contact' },
   { type: 'richText', label: 'Text' },
@@ -989,7 +1155,11 @@ const SECTION_LABEL: Record<string, string> = {
   hero: 'Hero',
   features: 'Features',
   products: 'Products',
+  gallery: 'Gallery',
+  pricing: 'Pricing',
+  faq: 'FAQ',
   testimonials: 'Testimonials',
+  logos: 'Logos',
   cta: 'Call to action',
   contact: 'Contact',
   richText: 'Text',

@@ -86,6 +86,8 @@ export async function startJob(spec: JobSpec): Promise<number> {
           logs: getLive(jobId)?.logs ?? [],
           finishedAt: new Date().toISOString(),
         })
+        // (Job failures are surfaced on /admin/errors by merging the Jobs collection — see
+        // operator/errorLog.ts loadOperatorErrors — so we don't double-log them here.)
         if (spec.cleanup) {
           try {
             await spec.cleanup(() => {}, 'error')

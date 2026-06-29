@@ -30,6 +30,7 @@ export interface OperatorTenantDto {
   name: string
   slug: string
   status: string
+  planLabel: string | null
   liveUrl: string | null
   members: number
   activeJobs: number
@@ -41,11 +42,22 @@ export interface OperatorDashboardDto {
   tenants: OperatorTenantDto[]
 }
 
+export interface TenantUsageDto {
+  pages: number
+  mediaCount: number
+  storageMb: number
+  publishedTotal: number
+  published30d: number
+  jobsDone30d: number
+  jobsFailed30d: number
+  errors30d: number
+}
 export interface TenantDetailDto {
   id: number
   name: string
   slug: string
   status: string
+  planLabel: string | null
   liveUrl: string | null
   allowOperatorEdit: boolean
   members: number
@@ -53,6 +65,7 @@ export interface TenantDetailDto {
   builtPages: number
   publishedSites: number
   sites: OperatorSiteDto[]
+  usage: TenantUsageDto
 }
 
 const cleanUrl = (u: unknown): string | null => {
@@ -110,6 +123,7 @@ export async function loadOperatorDashboard(user: User | null): Promise<Operator
     name: t.name ?? '(unnamed)',
     slug: t.slug ?? '',
     status: t.status ?? 'active',
+    planLabel: (typeof t.planLabel === 'string' && t.planLabel.trim()) || null,
     liveUrl: cleanUrl(t.liveUrl),
     members: membersByTenant.get(t.id) ?? 0,
     activeJobs: jobsByTenant.get(t.id) ?? 0,
@@ -137,11 +151,19 @@ export async function loadTenantDetail(user: User | null, tenantId: number): Pro
   const tenant: any = await payload.findByID({ collection: 'tenants', id: tenantId, overrideAccess: true, depth: 0 }).catch(() => null)
   if (!tenant) return null
 
-  const [sitesRes, jobsRes, usersRes, pagesRes] = await Promise.all([
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+  const ofTenant = (extra: any = {}) => ({ and: [{ tenant: { equals: tenantId } }, extra] })
+  const [sitesRes, jobsRes, usersRes, pagesRes, mediaRes, pubTotalRes, pub30Res, jobsDoneRes, jobsFailRes, errors30Res] = await Promise.all([
     payload.find({ collection: 'connectedSites', where: { tenant: { equals: tenantId } }, overrideAccess: true, limit: 2000, depth: 0 }),
-    payload.find({ collection: 'jobs', where: { and: [{ tenant: { equals: tenantId } }, { status: { in: ['running', 'cancelling'] } }] }, overrideAccess: true, limit: 1000, depth: 0 }),
+    payload.find({ collection: 'jobs', where: ofTenant({ status: { in: ['running', 'cancelling'] } }), overrideAccess: true, limit: 1000, depth: 0 }),
     payload.find({ collection: 'users', where: { 'tenants.tenant': { equals: tenantId } }, overrideAccess: true, limit: 2000, depth: 0 }),
     payload.find({ collection: 'pages', where: { tenant: { equals: tenantId } }, overrideAccess: true, limit: 1, depth: 0, draft: true }),
+    payload.find({ collection: 'media', where: { tenant: { equals: tenantId } }, overrideAccess: true, limit: 5000, depth: 0 }),
+    payload.find({ collection: 'jobs', where: ofTenant({ and: [{ type: { equals: 'publish' } }, { status: { equals: 'done' } }] }), overrideAccess: true, limit: 1, depth: 0 }),
+    payload.find({ collection: 'jobs', where: ofTenant({ and: [{ type: { equals: 'publish' } }, { status: { equals: 'done' } }, { finishedAt: { greater_than: since } }] }), overrideAccess: true, limit: 1, depth: 0 }),
+    payload.find({ collection: 'jobs', where: ofTenant({ and: [{ status: { equals: 'done' } }, { finishedAt: { greater_than: since } }] }), overrideAccess: true, limit: 1, depth: 0 }),
+    payload.find({ collection: 'jobs', where: ofTenant({ and: [{ status: { equals: 'error' } }, { finishedAt: { greater_than: since } }] }), overrideAccess: true, limit: 1, depth: 0 }),
+    payload.find({ collection: 'errorLogs', where: ofTenant({ createdAt: { greater_than: since } }), overrideAccess: true, limit: 1, depth: 0 }),
   ])
 
   const sites: OperatorSiteDto[] = (sitesRes.docs as any[]).map((s) => ({
@@ -153,12 +175,14 @@ export async function loadTenantDetail(user: User | null, tenantId: number): Pro
     pages: Array.isArray(s.pagePaths) ? s.pagePaths.length : 0,
   }))
   const members = (usersRes.docs as any[]).filter((u) => !u.isServicePrincipal).length
+  const storageBytes = (mediaRes.docs as any[]).reduce((sum, m) => sum + (typeof m.filesize === 'number' ? m.filesize : 0), 0)
 
   return {
     id: tenant.id,
     name: tenant.name ?? '(unnamed)',
     slug: tenant.slug ?? '',
     status: tenant.status ?? 'active',
+    planLabel: (typeof tenant.planLabel === 'string' && tenant.planLabel.trim()) || null,
     liveUrl: cleanUrl(tenant.liveUrl),
     allowOperatorEdit: Boolean(tenant.allowOperatorEdit),
     members,
@@ -166,5 +190,15 @@ export async function loadTenantDetail(user: User | null, tenantId: number): Pro
     builtPages: pagesRes.totalDocs ?? 0,
     publishedSites: sites.filter((s) => s.liveUrl).length,
     sites,
+    usage: {
+      pages: pagesRes.totalDocs ?? 0,
+      mediaCount: mediaRes.totalDocs ?? (mediaRes.docs as any[]).length,
+      storageMb: Math.round((storageBytes / (1024 * 1024)) * 10) / 10,
+      publishedTotal: pubTotalRes.totalDocs ?? 0,
+      published30d: pub30Res.totalDocs ?? 0,
+      jobsDone30d: jobsDoneRes.totalDocs ?? 0,
+      jobsFailed30d: jobsFailRes.totalDocs ?? 0,
+      errors30d: errors30Res.totalDocs ?? 0,
+    },
   }
 }

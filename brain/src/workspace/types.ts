@@ -4,6 +4,10 @@ export type PreviewBlock =
   | { type: 'features'; heading: string; imageUrl?: string; items: { title: string; text: string; imageUrl?: string }[] }
   | { type: 'products'; heading: string; imageUrl?: string; items: { name: string; description: string; price: string; oldPrice: string; badge: string; buttonLabel: string; imageUrl?: string }[] }
   | { type: 'testimonials'; heading: string; imageUrl?: string; items: { quote: string; author: string; imageUrl?: string }[] }
+  | { type: 'gallery'; heading: string; imageUrl?: string; items: { caption: string; imageUrl?: string }[] }
+  | { type: 'faq'; heading: string; imageUrl?: string; items: { question: string; answer: string }[] }
+  | { type: 'pricing'; heading: string; imageUrl?: string; items: { name: string; price: string; period: string; features: string; buttonLabel: string; highlighted: string }[] }
+  | { type: 'logos'; heading: string; imageUrl?: string; items: { alt: string; imageUrl?: string }[] }
   | { type: 'cta'; heading: string; buttonLabel: string; imageUrl?: string }
   | { type: 'contact'; heading: string; text: string; buttonLabel: string; imageUrl?: string }
   | { type: 'richText'; heading: string; body: string; imageUrl?: string }

@@ -30,6 +30,10 @@ const BLOCK_SCALAR_FIELDS: Record<BlockType, string[]> = {
   features: ['heading'],
   products: ['heading'],
   testimonials: ['heading'],
+  gallery: ['heading'],
+  faq: ['heading'],
+  pricing: ['heading'],
+  logos: ['heading'],
   cta: ['heading', 'buttonLabel'],
   contact: ['heading', 'text', 'buttonLabel'],
   richText: ['heading', 'body'],
@@ -38,6 +42,10 @@ const BLOCK_ITEM_FIELDS: Partial<Record<BlockType, string[]>> = {
   features: ['title', 'text'],
   products: ['name', 'description', 'price', 'oldPrice', 'badge', 'buttonLabel'],
   testimonials: ['quote', 'author'],
+  gallery: ['caption'],
+  faq: ['question', 'answer'],
+  pricing: ['name', 'price', 'period', 'features', 'buttonLabel', 'highlighted'],
+  logos: ['alt'],
 }
 const MAX_BLOCKS = 20
 const MAX_ITEMS = 12

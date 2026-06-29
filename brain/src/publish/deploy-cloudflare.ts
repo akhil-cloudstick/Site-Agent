@@ -25,6 +25,50 @@ const sanitizeProject = (name: string) => name.toLowerCase().replace(/[^a-z0-9-]
 /** SiteAgent-built tenants get a namespaced project; connected sites use their exact name. */
 const projectName = (slug: string) => sanitizeProject(`siteagent-${slug}`)
 
+/**
+ * Look up a Pages project's REAL production host (e.g. `test-project-123-c2r.pages.dev`).
+ *
+ * We CANNOT assume `<project>.pages.dev`: when the bare name is already taken by another
+ * project (anywhere on Cloudflare), Cloudflare assigns a suffixed subdomain like
+ * `<project>-c2r.pages.dev`. Guessing the bare name then links to a stranger's site
+ * (which 522s) instead of yours. The project's `subdomain` field is the authoritative host.
+ * Returns the host (no scheme) or null on any failure — caller falls back to the guess.
+ */
+async function fetchProjectHost(accountId: string, token: string, project: string): Promise<string | null> {
+  try {
+    const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/pages/projects/${project}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) return null
+    const data: any = await res.json()
+    const sub = data?.result?.subdomain
+    return typeof sub === 'string' && sub.endsWith('.pages.dev') ? sub : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Delete a Cloudflare Pages project (used by tenant removal when the operator opts in).
+ * Best-effort: returns true on success / already-gone (404), false on any other failure —
+ * a deletion failure must not abort the rest of the tenant cleanup.
+ */
+export async function deleteCloudflareProject(project: string): Promise<boolean> {
+  const env = getEnv()
+  if (!env.cloudflareAccountId || !env.cloudflareApiToken) return false
+  const name = sanitizeProject(project)
+  if (!name) return false
+  try {
+    const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${env.cloudflareAccountId}/pages/projects/${name}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${env.cloudflareApiToken}` },
+    })
+    return res.ok || res.status === 404
+  } catch {
+    return false
+  }
+}
+
 /** Deploy a static folder to a Cloudflare Pages project by its exact name (creating it
  *  on first deploy). Shared by both the builder and connected-site publishing.
  *  `onChild` lets a job register the spawned wrangler process so cancel can kill it. */
@@ -43,10 +87,15 @@ async function deployDir(project: string, dir: string, onChild?: (c: ChildProces
   const res = await run(['pages', 'deploy', dir, '--project-name', project, '--branch', 'main', '--commit-dirty=true'], childEnv, onChild)
 
   // A *.pages.dev URL (host may have multiple subdomain segments) or a "complete"
-  // line means success → return the stable production URL for the project.
+  // line means success.
   const deployed = /https:\/\/[a-z0-9.-]+\.pages\.dev/i.test(res.out) || /Deployment complete|Success! Uploaded/i.test(res.out)
-  if (deployed) return { url: `https://${project}.pages.dev`, project }
-  throw new Error('Cloudflare deploy failed: ' + res.out.slice(-600))
+  if (!deployed) throw new Error('Cloudflare deploy failed: ' + res.out.slice(-600))
+
+  // Use the REAL host Cloudflare assigned (may be suffixed, e.g. <project>-c2r.pages.dev),
+  // not the guessed `<project>.pages.dev` — see fetchProjectHost. Fall back to the guess
+  // only if the lookup fails, so deploy still returns *something* usable.
+  const host = await fetchProjectHost(env.cloudflareAccountId, env.cloudflareApiToken, project)
+  return { url: `https://${host ?? `${project}.pages.dev`}`, project }
 }
 
 /**
